@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 use bevy_editor_pls::*;
 use bevy_xpbd_3d::plugins::PhysicsPlugins;
 use platform::PlatformPlugin;
@@ -27,15 +26,7 @@ fn main() {
             PlatformPlugin,
             EditorPlugin::default()
         ))
-        .add_systems(Startup, hide_cursor)
         .run();
 }
 
 
-fn hide_cursor(
-    mut window: Query<&mut Window, With<PrimaryWindow>> 
-) {
-    let window = &mut window.single_mut();
-    window.cursor.visible = false;
-
-}

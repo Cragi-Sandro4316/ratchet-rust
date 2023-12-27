@@ -1,5 +1,7 @@
-use bevy::{ecs::query::Has, prelude::*};
+use bevy::prelude::*;
 use bevy_xpbd_3d::{math::*, prelude::*};
+
+use crate::camera::MovementHelper;
 
 pub struct CharacterControllerPlugin;
 
@@ -16,6 +18,7 @@ impl Plugin for CharacterControllerPlugin {
                 apply_deferred,
                 movement,
                 apply_movement_damping,
+                
             )
                 .chain(),
         );
@@ -136,19 +139,26 @@ impl CharacterControllerBundle {
 fn keyboard_input(
     mut movement_event_writer: EventWriter<MovementAction>,
     keyboard_input: Res<Input<KeyCode>>,
+    camera: Query<&Transform, With<MovementHelper>>,
+
+
 ) {
+    let Ok(camera_transform) = camera.get_single() else {return;};
+
     let up = keyboard_input.any_pressed([KeyCode::W, KeyCode::Up]);
     let down = keyboard_input.any_pressed([KeyCode::S, KeyCode::Down]);
     let left = keyboard_input.any_pressed([KeyCode::A, KeyCode::Left]);
     let right = keyboard_input.any_pressed([KeyCode::D, KeyCode::Right]);
 
+    let vertical = (up as i8 - down as i8) as f32 * Vec2::new(camera_transform.forward().x, -camera_transform.forward().z);
+    let horizontal =  (right as i8 - left as i8) as f32 * Vec2::new(camera_transform.right().x, -camera_transform.right().z);
 
-    let horizontal = right as i8 - left as i8;
-    let vertical = up as i8 - down as i8;
-    let direction = Vector2::new(horizontal as Scalar, vertical as Scalar).clamp_length_max(1.0);
-
+    let direction = horizontal + vertical;
+   
     if direction != Vector2::ZERO {
-        movement_event_writer.send(MovementAction::Move(direction));
+
+        movement_event_writer.send(MovementAction::Move(direction.normalize()));
+
     }
 
     if keyboard_input.just_pressed(KeyCode::Space) {
@@ -162,7 +172,11 @@ fn gamepad_input(
     gamepads: Res<Gamepads>,
     axes: Res<Axis<GamepadAxis>>,
     buttons: Res<Input<GamepadButton>>,
+    camera: Query<&Transform, With<MovementHelper>>
+
 ) {
+    let Ok(camera_transform) = camera.get_single() else {return;};
+    
     for gamepad in gamepads.iter() {
         let axis_lx = GamepadAxis {
             gamepad,
@@ -176,9 +190,13 @@ fn gamepad_input(
         
 
         if let (Some(x), Some(y)) = (axes.get(axis_lx), axes.get(axis_ly)) {
-            movement_event_writer.send(MovementAction::Move(
-                Vector2::new(x as Scalar, y as Scalar).clamp_length_max(1.0),
-            ));
+            let vertical = y * Vec2::new(camera_transform.forward().x, -camera_transform.forward().z);
+            let horizontal =  x * Vec2::new(camera_transform.right().x, -camera_transform.right().z);
+
+
+            let direction = horizontal + vertical;
+            
+            movement_event_writer.send(MovementAction::Move(direction));
         }
 
         let jump_button = GamepadButton {
@@ -234,12 +252,15 @@ fn movement(
     // both the `f32` and `f64` features. Otherwise you don't need this.
     let delta_time = time.delta_seconds_f64().adjust_precision();
 
+
+
     for event in movement_event_reader.read() {
         for (movement_acceleration, jump_impulse, mut linear_velocity, is_grounded) in
             &mut controllers
         {
             match event {
                 MovementAction::Move(direction) => {
+
                     linear_velocity.x += direction.x * movement_acceleration.0 * delta_time;
                     linear_velocity.z -= direction.y * movement_acceleration.0 * delta_time;
                 }
@@ -268,17 +289,12 @@ pub struct CameraTarget;
 
 fn spawn_player(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    assets: Res<AssetServer>,
 ) {
     // Player
     commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Capsule {
-                radius: 0.4,
-                ..default()
-            })),
-            material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
+        SceneBundle {
+            scene: assets.load("ratchet.glb#Scene0"),
             transform: Transform::from_xyz(0.0, 1.5, 0.0),
             ..default()
         },
@@ -294,3 +310,8 @@ fn spawn_player(
         CameraTarget
     ));
 }
+
+
+
+
+
