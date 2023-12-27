@@ -12,9 +12,9 @@ impl Plugin for CharacterControllerPlugin {
         .add_systems(
             Update,
             (
+                update_grounded,
                 keyboard_input,
                 gamepad_input,
-                update_grounded,
                 apply_deferred,
                 movement,
                 apply_movement_damping,
@@ -52,6 +52,13 @@ pub struct MovementDampingFactor(Scalar);
 #[derive(Component)]
 pub struct JumpImpulse(Scalar);
 
+/// The strength of a double jump.
+#[derive(Component)]
+pub struct DoubleJumpImpulse(Scalar);
+
+#[derive(Component)]
+pub struct JumpCounter(Scalar);
+
 /// The maximum angle a slope can have for a character controller
 /// to be able to climb and jump. If the slope is steeper than this angle,
 /// the character will slide down.
@@ -76,6 +83,7 @@ pub struct MovementBundle {
     acceleration: MovementAcceleration,
     damping: MovementDampingFactor,
     jump_impulse: JumpImpulse,
+    double_jump_impulse: DoubleJumpImpulse,
     max_slope_angle: MaxSlopeAngle,
 }
 
@@ -84,12 +92,14 @@ impl MovementBundle {
         acceleration: Scalar,
         damping: Scalar,
         jump_impulse: Scalar,
+        double_jump_impulse: Scalar,
         max_slope_angle: Scalar,
     ) -> Self {
         Self {
             acceleration: MovementAcceleration(acceleration),
             damping: MovementDampingFactor(damping),
             jump_impulse: JumpImpulse(jump_impulse),
+            double_jump_impulse: DoubleJumpImpulse(double_jump_impulse),
             max_slope_angle: MaxSlopeAngle(max_slope_angle),
         }
     }
@@ -97,7 +107,7 @@ impl MovementBundle {
 
 impl Default for MovementBundle {
     fn default() -> Self {
-        Self::new(30.0, 0.9, 7.0, PI * 0.45)
+        Self::new(30.0, 0.9, 7.0, 7.0,  PI * 0.45)
     }
 }
 
@@ -128,9 +138,10 @@ impl CharacterControllerBundle {
         acceleration: Scalar,
         damping: Scalar,
         jump_impulse: Scalar,
+        double_jump_impulse: Scalar,
         max_slope_angle: Scalar,
     ) -> Self {
-        self.movement = MovementBundle::new(acceleration, damping, jump_impulse, max_slope_angle);
+        self.movement = MovementBundle::new(acceleration, damping, jump_impulse, double_jump_impulse, max_slope_angle);
         self
     }
 }
@@ -156,13 +167,12 @@ fn keyboard_input(
     let direction = horizontal + vertical;
    
     if direction != Vector2::ZERO {
-
         movement_event_writer.send(MovementAction::Move(direction.normalize()));
-
     }
 
-    if keyboard_input.just_pressed(KeyCode::Space) {
+    if keyboard_input.any_just_pressed([KeyCode::Space]) {
         movement_event_writer.send(MovementAction::Jump);
+        
     }
 }
 
@@ -172,11 +182,11 @@ fn gamepad_input(
     gamepads: Res<Gamepads>,
     axes: Res<Axis<GamepadAxis>>,
     buttons: Res<Input<GamepadButton>>,
-    camera: Query<&Transform, With<MovementHelper>>
+    camera: Query<&Transform, With<MovementHelper>>,
 
 ) {
     let Ok(camera_transform) = camera.get_single() else {return;};
-    
+
     for gamepad in gamepads.iter() {
         let axis_lx = GamepadAxis {
             gamepad,
@@ -207,6 +217,9 @@ fn gamepad_input(
         if buttons.just_pressed(jump_button) {
             movement_event_writer.send(MovementAction::Jump);
         }
+        
+        
+        
     }
 }
 
@@ -217,7 +230,10 @@ fn update_grounded(
         (Entity, &ShapeHits, &Rotation, Option<&MaxSlopeAngle>),
         With<CharacterController>,
     >,
+    mut jump_counter: Query<&mut JumpCounter>
 ) {
+    let Ok(mut jump_counter) = jump_counter.get_single_mut() else {return;};
+    
     for (entity, hits, rotation, max_slope_angle) in &mut query {
         // The character is grounded if the shape caster has a hit with a normal
         // that isn't too steep.
@@ -231,6 +247,7 @@ fn update_grounded(
 
         if is_grounded {
             commands.entity(entity).insert(Grounded);
+            jump_counter.0 = 0.;
         } else {
             commands.entity(entity).remove::<Grounded>();
         }
@@ -244,8 +261,10 @@ fn movement(
     mut controllers: Query<(
         &MovementAcceleration,
         &JumpImpulse,
+        &DoubleJumpImpulse,
         &mut LinearVelocity,
         Has<Grounded>,
+        &mut JumpCounter
     )>,
 ) {
     // Precision is adjusted so that the example works with
@@ -255,7 +274,7 @@ fn movement(
 
 
     for event in movement_event_reader.read() {
-        for (movement_acceleration, jump_impulse, mut linear_velocity, is_grounded) in
+        for (movement_acceleration, jump_impulse, double_jump_impulse, mut linear_velocity, is_grounded, mut jump_counter) in
             &mut controllers
         {
             match event {
@@ -267,6 +286,10 @@ fn movement(
                 MovementAction::Jump => {
                     if is_grounded {
                         linear_velocity.y = jump_impulse.0;
+                        jump_counter.0 += 1.;
+                    } else if jump_counter.0 < 2. {
+                        linear_velocity.y = double_jump_impulse.0;
+                        
                     }
                 }
             }
@@ -298,16 +321,18 @@ fn spawn_player(
             transform: Transform::from_xyz(0.0, 1.5, 0.0),
             ..default()
         },
-        CharacterControllerBundle::new(Collider::capsule(1.0, 0.4)).with_movement(
+        CharacterControllerBundle::new(Collider::capsule(1.2, 0.4)).with_movement(
             40.0,
             0.92,
-            7.0,
+            9.0,
+            7.5,
             (30.0 as Scalar).to_radians(),
         ),
         Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
         Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),
         GravityScale(2.0),
-        CameraTarget
+        CameraTarget,
+        JumpCounter(0.)
     ));
 }
 
