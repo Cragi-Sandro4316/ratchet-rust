@@ -57,7 +57,10 @@ pub struct JumpImpulse(Scalar);
 pub struct DoubleJumpImpulse(Scalar);
 
 #[derive(Component)]
-pub struct JumpCounter(Scalar);
+pub struct JumpCounter {
+    pub counter: Scalar,
+    pub jump_time: Scalar
+}
 
 /// The maximum angle a slope can have for a character controller
 /// to be able to climb and jump. If the slope is steeper than this angle,
@@ -183,6 +186,7 @@ fn gamepad_input(
     axes: Res<Axis<GamepadAxis>>,
     buttons: Res<Input<GamepadButton>>,
     camera: Query<&Transform, With<MovementHelper>>,
+    
 
 ) {
     let Ok(camera_transform) = camera.get_single() else {return;};
@@ -230,7 +234,8 @@ fn update_grounded(
         (Entity, &ShapeHits, &Rotation, Option<&MaxSlopeAngle>),
         With<CharacterController>,
     >,
-    mut jump_counter: Query<&mut JumpCounter>
+    mut jump_counter: Query<&mut JumpCounter>,
+    time: Res<Time>
 ) {
     let Ok(mut jump_counter) = jump_counter.get_single_mut() else {return;};
     
@@ -247,12 +252,20 @@ fn update_grounded(
 
         if is_grounded {
             commands.entity(entity).insert(Grounded);
-            jump_counter.0 = 0.;
+            // waits half a second after a jump before resetting the counter 
+            // to avoid the counter being reset on the first jump frame
+            if time.elapsed_seconds() > jump_counter.jump_time + 0.5 {
+                jump_counter.counter = 0.;
+            }
+
         } else {
             commands.entity(entity).remove::<Grounded>();
+            
         }
     }
 }
+
+
 
 /// Responds to [`MovementAction`] events and moves character controllers accordingly.
 fn movement(
@@ -285,10 +298,12 @@ fn movement(
                 }
                 MovementAction::Jump => {
                     if is_grounded {
+                        jump_counter.jump_time = time.elapsed_seconds();
                         linear_velocity.y = jump_impulse.0;
-                        jump_counter.0 += 1.;
-                    } else if jump_counter.0 < 2. {
+                        jump_counter.counter += 1.;
+                    } else if jump_counter.counter < 2. && jump_counter.counter > 0. && time.elapsed_seconds() < jump_counter.jump_time + 0.85 {
                         linear_velocity.y = double_jump_impulse.0;
+                        jump_counter.counter += 1.;
                         
                     }
                 }
@@ -332,7 +347,10 @@ fn spawn_player(
         Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),
         GravityScale(2.0),
         CameraTarget,
-        JumpCounter(0.)
+        JumpCounter {
+            counter: 0.,
+            jump_time: -1.
+        }
     ));
 }
 
