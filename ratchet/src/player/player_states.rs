@@ -118,10 +118,19 @@ fn gamepad_input(
         // if ratchet is not swinging the wrench it takes the direction input
         if !is_swinging {
             if let (Some(x), Some(y)) = (axes.get(axis_lx), axes.get(axis_ly)) {
-                let vertical = y * Vec2::new(camera_transform.forward().x, -camera_transform.forward().z);
-                let horizontal =  x * Vec2::new(camera_transform.right().x, -camera_transform.right().z);
+
+                let mut vertical = Vec2::ZERO;
+                let mut horizontal = Vec2::ZERO;
+                if x > 0.2 || x < -0.2 {
+                    horizontal =  x * Vec2::new(camera_transform.right().x, -camera_transform.right().z);
+                }
     
+                if y > 0.2 || y < -0.2 {
+                    vertical = y * Vec2::new(camera_transform.forward().x, -camera_transform.forward().z);
+                }
+
                 direction = horizontal + vertical;
+
             }
         }
         
@@ -177,7 +186,11 @@ fn gamepad_input(
 
             // positions the collider in front of the player
             let hitbox_position = Position::new(
-                player_transform.translation + player_transform.forward().normalize() / 2.
+                player_transform.translation + Vec3::new(
+                    -player_transform.forward().x , 
+                    player_transform.forward().y, 
+                    player_transform.forward().z
+                ).normalize() / 2.
             );
 
             // spawns the collider
@@ -225,7 +238,7 @@ fn remove_hitbox(
     
     // if the player is not swinging it removes the hitbox
     if !is_swinging {
-        //commands.entity(hitbox_entity).despawn();
+        commands.entity(hitbox_entity).despawn();
     }
 }
 

@@ -1,9 +1,22 @@
 use std::f32::consts::PI;
 
 use bevy::{prelude::*, pbr::CascadeShadowConfigBuilder};
-use bevy_xpbd_3d::{components::{ComputedCollider, AsyncSceneCollider, RigidBody, Collider, Friction, CoefficientCombine, Mass}, prelude::PhysicsLayer, plugins::collision::Collisions};
+use bevy_xpbd_3d::{
+    components::{
+        ComputedCollider, 
+        AsyncSceneCollider, 
+        RigidBody, Collider, 
+        Friction, 
+        CoefficientCombine, 
+        Mass
+    }, 
+    prelude::PhysicsLayer, 
+    plugins::collision::Collisions
+};
 
-use crate::player_states::{Hitbox, Damage};
+use rand::Rng;
+
+use crate::{player_states::{Hitbox, Damage}, player::{CharacterController, Bolts}, /*player::CharacterController*/};
 
 
 pub struct PlatformPlugin;
@@ -13,7 +26,8 @@ impl Plugin for PlatformPlugin {
         app.add_systems(Startup, spawn_terrain)
             .add_systems(Update, (
                 update_crate_state,
-                delete_crates
+                delete_crates,
+                crate_animator
             ).chain());
     }
 }
@@ -24,12 +38,19 @@ pub struct CrateHealth(pub f32);
 #[derive(PhysicsLayer)]
 pub enum Layer {
     Hittable,
-    Hitbox,
+    //Hitbox,
     Player
 }
 
+// array containing all player animations
+#[derive(Resource)]
+pub struct CrateAnimations(pub Vec<Handle<AnimationClip>>);
+
 #[derive(Component)]
 pub struct CrateIdentifier;
+
+#[derive(Component)]
+pub struct Dead;
 
 fn spawn_terrain(
     mut commands: Commands,
@@ -89,6 +110,12 @@ fn spawn_terrain(
         },
     ));
 
+
+    commands.insert_resource(CrateAnimations(vec![
+        assets.load("bolt_crate.glb#Animation0"),
+
+        // other animations here
+    ]));
     
     // Crates
     commands.spawn((
@@ -107,7 +134,7 @@ fn spawn_terrain(
         RigidBody::Dynamic,
         Collider::cuboid(1.0, 1., 1.0),
         CrateHealth(1.),
-        CrateIdentifier
+        CrateIdentifier,
     ));
 
     commands.spawn((
@@ -126,7 +153,7 @@ fn spawn_terrain(
         RigidBody::Dynamic,
         Collider::cuboid(1.0, 1., 1.0),
         CrateHealth(1.),
-        CrateIdentifier
+        CrateIdentifier,
 
     ));
 
@@ -146,7 +173,8 @@ fn spawn_terrain(
         RigidBody::Dynamic,
         Collider::cuboid(1.0, 1., 1.0),
         CrateHealth(1.),
-        CrateIdentifier
+        CrateIdentifier,
+
     ));
 
     
@@ -157,7 +185,8 @@ fn spawn_terrain(
 fn update_crate_state(
     mut crate_q: Query<(Entity, &mut CrateHealth), With<CrateIdentifier>>,
     hitbox_q: Query<(Entity, &Damage), (With<Hitbox>, With<Collider>)>,
-    collisions: Res<Collisions>
+    collisions: Res<Collisions>,
+    //time: Res<Time>
 ) {
     for (crate_collider, mut crate_health) in crate_q.iter_mut() {
         for (hitbox, damage) in hitbox_q.iter() {
@@ -170,13 +199,41 @@ fn update_crate_state(
 
 fn delete_crates(
     mut commands: Commands,
-    mut crate_q: Query<(Entity, &mut CrateHealth), With<CrateIdentifier>>,
+    crate_q: Query<(Entity, &mut CrateHealth), With<CrateIdentifier>>,
 
 ) {
     for (crate_entity, crate_health) in crate_q.iter() {
         if crate_health.0 <= 0. {
-            println!("deleted");
-            commands.entity(crate_entity).despawn_recursive();
+            commands.entity(crate_entity).insert(Dead);
+        }
+    }
+}
+
+fn crate_animator(
+    mut anim_player_q: Query<(&mut AnimationPlayer, Entity)>,
+    animations: Res<CrateAnimations>,
+    crate_q: Query<Entity, (With<CrateIdentifier>, With<Dead>)>,
+    mut commands: Commands,
+    parent_query: Query<&Parent>,
+    mut player_bolts: Query<&mut Bolts, With<CharacterController>>
+) {
+    let Ok(mut bolts) = player_bolts.get_single_mut() else {return;};
+    
+    for (mut anim_player, anim_player_entity) in &mut anim_player_q.iter_mut() {
+        for parent in parent_query.iter_ancestors(anim_player_entity) {
+            for grandparent in parent_query.iter_ancestors(parent) {
+                for crates in crate_q.iter() {
+                    if commands.entity(grandparent).id() == commands.entity(crates).id() {
+                        anim_player.play(animations.0[0].clone_weak());
+
+                        if anim_player.is_finished() {
+                            commands.entity(crates).despawn_recursive();
+                            bolts.0 += rand::thread_rng().gen_range(60..200);
+                            println!("bolts: {}", bolts.0);
+                        }
+                    }
+                }
+            }
         }
     }
 }

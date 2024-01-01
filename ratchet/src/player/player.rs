@@ -155,13 +155,14 @@ impl CharacterControllerBundle {
 
 // array containing all player animations
 #[derive(Resource)]
-pub struct Animations(pub Vec<Handle<AnimationClip>>);
+pub struct PlayerAnimations(pub Vec<Handle<AnimationClip>>);
 
 // the animation being currently played
 #[derive(Component)]
 pub struct CurrentAnimation(pub String);
 
-
+#[derive(Component)]
+pub struct Bolts(pub i32);
 
 #[derive(Component)]
 pub struct CameraTarget;
@@ -171,7 +172,7 @@ fn spawn_player(
     assets: Res<AssetServer>,
 ) {
 
-    commands.insert_resource(Animations(vec![
+    commands.insert_resource(PlayerAnimations(vec![
         assets.load("og_ratchet.glb#Animation0"),
         assets.load("og_ratchet.glb#Animation1"),
         assets.load("og_ratchet.glb#Animation2"),
@@ -204,9 +205,9 @@ fn spawn_player(
             jump_time: -1.
         },
         CurrentAnimation("IDLE".to_owned()),
+        Bolts(0)        
     ));
 }
-
 
 
 

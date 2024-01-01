@@ -21,6 +21,11 @@ mod camera;
 #[path ="./world/platform.rs"]
 mod platform;
 
+#[path = "./ui/gui.rs"]
+mod gui;
+
+use crate::gui::GUIPlugin;
+
 
 use crate::player::CharacterControllerPlugin;
 use crate::camera::CameraPlugin_;
@@ -33,6 +38,7 @@ fn main() {
             CameraPlugin_,
             PhysicsPlugins::default(),
             PlatformPlugin,
+            GUIPlugin,
             EditorPlugin::default()
         ))
         .run();
