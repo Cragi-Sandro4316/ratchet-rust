@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{player::{CurrentAnimation, CharacterController, JumpCounter, PlayerAnimations}, player_states::*};
+use crate::{player::{CurrentAnimation, CharacterController, JumpCounter, PlayerAnimations, Grounded, self}, player_states::*};
 
 pub struct PlayerAnimationsPlugin; 
 
@@ -36,20 +36,28 @@ fn play_animations(
                 if commands.entity(grandparent).id() == commands.entity(player_entity).id() {
                     match animation.0.as_str() {
                                 "IDLE" => {
-                                    anim_player.play(animations.0[1].clone_weak()).repeat();
+                                    anim_player.play(animations.0[3].clone_weak()).repeat();
                     
                                 }
                                 "JUMP" => {
-                                    anim_player.play(animations.0[2].clone_weak());
+                                    anim_player.play(animations.0[4].clone_weak());
+                                    if anim_player.is_finished() {
+                                        commands.entity(player_entity).remove::<Jump>();
+                                    }
                                 }
                                 "DOUBLEJUMP" => {
-                                    anim_player.play(animations.0[0].clone_weak());
+                                    anim_player.play(animations.0[1].clone_weak());
+                                    if anim_player.is_finished() {
+                                        commands.entity(player_entity).remove::<DoubleJump>();
+                                    }
                                 }
                                 "WALK" => {
-                                    anim_player.play(animations.0[4].clone_weak()).repeat();
+                                    anim_player.play(animations.0[7].clone_weak()).repeat();
+                                    println!("bb");
+                                    
                                 }
                                 "SWING1" => {
-                                    anim_player.play(animations.0[3].clone_weak());
+                                    anim_player.play(animations.0[6].clone_weak());
                                 }
                                 
                                 _ => {}
@@ -71,8 +79,10 @@ pub fn animation_selector(
         Has<Idle>,
         Has<Walking>,
         Has<Jump>,
+        Has<DoubleJump>,
         Has<Swing1>,
-        &JumpCounter,
+        Has<Falling>,
+        Has<Grounded>,
         &mut CurrentAnimation
     ), With<CharacterController>>
 ) {
@@ -80,20 +90,27 @@ pub fn animation_selector(
         is_idle,
         is_walking,
         is_jumping,
+        is_double_jumping,
         is_swinging,
-        jump_counter,
+        is_falling,
+        is_grounded,
         mut current_animation
     )) = player_query.get_single_mut() else {return;};
 
-    if is_jumping {
-        if jump_counter.counter < 2. {
+
+    if !is_grounded {
+        if is_jumping {
             current_animation.0 = "JUMP".to_owned();
         }
-        else {
+        else if is_double_jumping {
+            println!("aaa");
             current_animation.0 = "DOUBLEJUMP".to_owned();
+        } 
+        else if is_falling {
+            current_animation.0 = "JUMP".to_owned();
         }
-    }
-    else {
+
+    } else {
         if is_swinging {
             current_animation.0 = "SWING1".to_owned();
         }
@@ -106,5 +123,26 @@ pub fn animation_selector(
             }
         }
     }
+
+    // if is_jumping {
+    //     current_animation.0 = "JUMP".to_owned();
+    // }
+    // else if is_double_jumping {
+    //     current_animation.0 = "DOUBLEJUMP".to_owned();
+    // }
+    // else if is_grounded {
+    //     if is_swinging {
+    //         current_animation.0 = "SWING1".to_owned();
+    //     }
+    //     else {
+    //         if is_walking {
+    //             current_animation.0 = "WALK".to_owned();
+    //         }
+    //         else if is_idle {
+    //             current_animation.0 = "IDLE".to_owned();
+    //         }
+    //     }
+    // }
+
 
 }

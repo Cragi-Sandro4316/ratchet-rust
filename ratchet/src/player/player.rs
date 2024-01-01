@@ -32,6 +32,7 @@ impl Plugin for CharacterControllerPlugin {
 pub enum MovementAction {
     Move(Vector2),
     Jump,
+    DoubleJump,
     Swing1(Vector2),
 }
 
@@ -178,6 +179,10 @@ fn spawn_player(
         assets.load("og_ratchet.glb#Animation2"),
         assets.load("og_ratchet.glb#Animation3"),
         assets.load("og_ratchet.glb#Animation4"),
+        assets.load("og_ratchet.glb#Animation5"),
+        assets.load("og_ratchet.glb#Animation6"),
+        assets.load("og_ratchet.glb#Animation7"),
+
 
         // other animations here
     ]));

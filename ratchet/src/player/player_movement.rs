@@ -45,22 +45,21 @@ fn movement(
                 
                 }
                 MovementAction::Jump => {
-                    if is_grounded {
-                        jump_counter.jump_time = time.elapsed_seconds();
-                        linear_velocity.y = jump_impulse.0;
-                        jump_counter.counter += 1.;
-                    } 
-                    else if jump_counter.counter < 2. 
-                    && jump_counter.counter > 0. 
-                    && time.elapsed_seconds() < jump_counter.jump_time + 0.85 {
-                        linear_velocity.y = double_jump_impulse.0;
-                        jump_counter.counter += 1.;
+                    jump_counter.jump_time = time.elapsed_seconds();
+                    linear_velocity.y = jump_impulse.0;
+                    jump_counter.counter += 1.;
                         
-                    }
+                        
+                }
+                MovementAction::DoubleJump => {
+                    linear_velocity.y = double_jump_impulse.0;
+                    jump_counter.counter += 1.;
+
                 }
                 MovementAction::Swing1(direction) => {
                     linear_velocity.x += direction.x * movement_acceleration.0 * delta_time;
                     linear_velocity.z -= direction.y * movement_acceleration.0 * delta_time;
+                
                 }
 
             }

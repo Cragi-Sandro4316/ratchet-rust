@@ -13,7 +13,8 @@ impl Plugin for PlayerStatePlugin {
                 keyboard_input,
                 gamepad_input,
                 handle_wrench_swing,
-                remove_hitbox
+                remove_hitbox,
+                //handle_gliding
             ).chain()
         );
     }
@@ -22,6 +23,15 @@ impl Plugin for PlayerStatePlugin {
 
 #[derive(Component)]
 pub struct Jump;
+
+#[derive(Component)]
+pub struct DoubleJump;
+
+#[derive(Component)]
+pub struct Falling;
+
+#[derive(Component)]
+pub struct Gliding;
 
 #[derive(Component)]
 pub struct Walking;
@@ -46,12 +56,15 @@ fn keyboard_input(
     mut movement_event_writer: EventWriter<MovementAction>,
     keyboard_input: Res<Input<KeyCode>>,
     camera: Query<&Transform, With<MovementHelper>>,
-    mut player: Query<(Entity, &mut Transform), (With<CharacterController>, Without<MovementHelper>)>,
-    mut commands: Commands
+    mut player: Query<(Entity, &mut Transform, Has<Swing1>), (With<CharacterController>, Without<MovementHelper>)>,
 
+    mouse_input: Res<Input<MouseButton>>,
+
+    mut commands: Commands,
+    time: Res<Time>
 ) {
     let Ok(camera_transform) = camera.get_single() else {return;};
-    let Ok((player_entity, mut player_transform)) = player.get_single_mut() else {return;};
+    let Ok((player_entity, mut player_transform, is_swinging)) = player.get_single_mut() else {return;};
 
     let up = keyboard_input.any_pressed([KeyCode::W, KeyCode::Up]);
     let down = keyboard_input.any_pressed([KeyCode::S, KeyCode::Down]);
@@ -61,21 +74,67 @@ fn keyboard_input(
     let vertical = (up as i8 - down as i8) as f32 * Vec2::new(camera_transform.forward().x, -camera_transform.forward().z);
     let horizontal =  (right as i8 - left as i8) as f32 * Vec2::new(camera_transform.right().x, -camera_transform.right().z);
 
-    let direction = horizontal + vertical;
+    let mut direction = Vec2::ZERO;
    
+    if !is_swinging {
+        direction = horizontal + vertical;
+    }
 
-    movement_event_writer.send(MovementAction::Move(direction));
 
-        if direction == Vec2::ZERO {
-            commands.entity(player_entity).insert(Idle);
-            commands.entity(player_entity).remove::<Walking>();
+    if direction == Vec2::ZERO {
+        commands.entity(player_entity).insert(Idle);
+        commands.entity(player_entity).remove::<Walking>();
+
+        if is_swinging {
+            let swing_direction = Vec2::new(
+                -player_transform.forward().x,
+                player_transform.forward().z
+            ).normalize();
+            
+            movement_event_writer.send(MovementAction::Move(swing_direction / 4.));
         }
-        else {
-            let look_at = player_transform.translation + Vec3::new(-direction.x, 0., direction.y);
-            player_transform.look_at(look_at, Vec3::Y);
-            commands.entity(player_entity).insert(Walking);
-            commands.entity(player_entity).remove::<Idle>();
-        }
+    }
+    else {
+        
+        let look_at = player_transform.translation + Vec3::new(-direction.x, 0., direction.y);
+        player_transform.look_at(look_at, Vec3::Y);
+        commands.entity(player_entity).insert(Walking);
+        commands.entity(player_entity).remove::<Idle>();
+        movement_event_writer.send(MovementAction::Swing1(direction));
+    
+    }
+    
+
+    if mouse_input.any_just_pressed([MouseButton::Left]) && !is_swinging {
+            
+        // inserts the swing state
+        commands.entity(player_entity).insert(Swing1{
+            swing_time: time.elapsed_seconds()
+        });
+
+        // [HITBOX]
+
+        // creates a collider that interacts only with hittable entities
+        let hitbox = commands.spawn((
+            Collider::cylinder(0.5, 1.2),
+            CollisionLayers::new([Layer::Player], [Layer::Hittable]),
+            Hitbox,
+            Damage(1.)
+        )).id(); 
+
+        // positions the collider in front of the player
+        let hitbox_position = Position::new(
+            player_transform.translation + Vec3::new(
+                -player_transform.forward().x , 
+                player_transform.forward().y, 
+                player_transform.forward().z
+            ).normalize() / 2.
+        );
+
+        // spawns the collider
+        commands.entity(hitbox).insert(hitbox_position);
+    }
+
 
     if keyboard_input.any_just_pressed([KeyCode::Space]) {
         movement_event_writer.send(MovementAction::Jump);
@@ -94,14 +153,31 @@ fn gamepad_input(
     axes: Res<Axis<GamepadAxis>>,
     buttons: Res<Input<GamepadButton>>,
     camera: Query<&Transform, With<MovementHelper>>,
-    mut player: Query<(Entity, &mut Transform, Has<Swing1>), (With<CharacterController>, Without<MovementHelper>)>,
+    mut player: Query<(
+        Entity, 
+        &mut Transform, 
+        Has<Swing1>, 
+        Has<Grounded>,
+        Has<Falling>,
+        Has<Jump>,
+        Has<DoubleJump>,
+        &JumpCounter
+    ), (With<CharacterController>, Without<MovementHelper>)>,
     mut commands: Commands,
 
     time: Res<Time>
 
 ) {
     let Ok(camera_transform) = camera.get_single() else {return;};
-    let Ok((player_entity, mut player_transform, is_swinging)) = player.get_single_mut() else {return;};
+    let Ok((player_entity, 
+        mut player_transform, 
+        is_swinging, 
+        is_grounded,
+        is_falling,
+        is_jumping,
+        is_double_jumping,
+        jump_counter
+    )) = player.get_single_mut() else {return;};
 
     for gamepad in gamepads.iter() {
         let axis_lx = GamepadAxis {
@@ -204,9 +280,30 @@ fn gamepad_input(
         };
 
         if buttons.just_pressed(jump_button) {
-            movement_event_writer.send(MovementAction::Jump);
-            commands.entity(player_entity).insert(Jump);
+            if jump_counter.counter == 0. && is_grounded {
+                commands.entity(player_entity).insert(Jump);
+                movement_event_writer.send(MovementAction::Jump);
+            }
+            else {
+                commands.entity(player_entity).remove::<Jump>();
+                if jump_counter.counter < 2. && jump_counter.counter > 0.
+                && time.elapsed_seconds() < jump_counter.jump_time + 0.85  {
+                    movement_event_writer.send(MovementAction::DoubleJump);
+                    
+                    commands.entity(player_entity).remove::<Jump>();
+                    commands.entity(player_entity).insert(DoubleJump);
+                    
+                }
+
+            }
         }
+
+        if is_falling && !is_jumping && !is_double_jumping {
+            if buttons.pressed(jump_button) {
+                commands.entity(player_entity).insert(Gliding);
+            }
+        }
+
          
     }
 }
@@ -270,19 +367,37 @@ fn update_grounded(
 
         if is_grounded {
             commands.entity(entity).insert(Grounded);
-            commands.entity(entity).remove::<Jump>();
+            
 
             // waits half a second after a jump before resetting the counter 
             // to avoid the counter being reset on the first jump frame
-            if time.elapsed_seconds() > jump_counter.jump_time + 0.5 {
+            if time.elapsed_seconds() > jump_counter.jump_time + 0.7 {
                 jump_counter.counter = 0.;
+                commands.entity(entity).remove::<Jump>();
+                commands.entity(entity).remove::<DoubleJump>();
             }
 
         } else {
             commands.entity(entity).remove::<Grounded>();
+            commands.entity(entity).remove::<Idle>();
+            commands.entity(entity).remove::<Walking>();
             
             // jump animation is also the fall animation
-            commands.entity(entity).insert(Jump);
+            commands.entity(entity).insert(Falling);
         }
     }
 }
+
+
+// fn handle_gliding(
+//     mut player_q: Query<(Has<Gliding>, &mut GravityScale), With<CharacterController>>
+// ) {
+//     let Ok((is_gliding, mut gravity)) = player_q.get_single_mut() else {return;};
+
+//     if is_gliding {
+//         gravity.0 = 1.5;
+//     }
+//     else {
+//         gravity.0 = 3.;
+//     }
+// }
