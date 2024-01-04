@@ -87,7 +87,7 @@ fn spawn_terrain(
     // terrain
     commands.spawn((
         SceneBundle {
-            scene: assets.load("./character_controller_demo.glb#Scene0"),
+            scene: assets.load("./character_controller2.glb#Scene0"),
             transform: Transform::from_rotation(Quat::from_rotation_y(-std::f32::consts::PI * 0.5)),
             ..default()
         },
@@ -121,7 +121,7 @@ fn spawn_terrain(
     commands.spawn((
         SceneBundle {
             scene: assets.load("./bolt_crate.glb#Scene0"),
-            transform: Transform::from_xyz(-2., 0.5, 1.),
+            transform: Transform::from_xyz(-2., 0.6, 1.),
             ..default()
         
         },
@@ -140,7 +140,7 @@ fn spawn_terrain(
     commands.spawn((
         SceneBundle {
             scene: assets.load("./bolt_crate.glb#Scene0"),
-            transform: Transform::from_xyz(-2., 1.5, 1.),
+            transform: Transform::from_xyz(-2., 1.8, 1.),
             ..default()
         
         },
@@ -160,7 +160,7 @@ fn spawn_terrain(
     commands.spawn((
         SceneBundle {
             scene: assets.load("./bolt_crate.glb#Scene0"),
-            transform: Transform::from_xyz(-2., 2.5, 1.),
+            transform: Transform::from_xyz(-2., 3., 1.),
             ..default()
         
         },

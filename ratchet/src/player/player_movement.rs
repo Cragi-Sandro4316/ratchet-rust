@@ -24,7 +24,6 @@ fn movement(
         &JumpImpulse,
         &DoubleJumpImpulse,
         &mut LinearVelocity,
-        Has<Grounded>,
         &mut JumpCounter,
     )>,
 
@@ -35,7 +34,7 @@ fn movement(
     let delta_time = time.delta_seconds_f64().adjust_precision();
 
     for event in movement_event_reader.read() {
-        for (movement_acceleration, jump_impulse, double_jump_impulse, mut linear_velocity, is_grounded, mut jump_counter) in
+        for (movement_acceleration, jump_impulse, double_jump_impulse, mut linear_velocity, mut jump_counter) in
             &mut controllers
         {
             match event {
@@ -60,6 +59,17 @@ fn movement(
                     linear_velocity.x += direction.x * movement_acceleration.0 * delta_time;
                     linear_velocity.z -= direction.y * movement_acceleration.0 * delta_time;
                 
+                }
+                MovementAction::HighJump => {
+                    linear_velocity.y = 16.;
+                }
+                MovementAction::LongJump(direction) => {
+
+                    linear_velocity.x += direction.x * movement_acceleration.0 * 2.0 * time.delta_seconds() ;
+                    linear_velocity.z -= direction.y * movement_acceleration.0 * 2.0 * time.delta_seconds();
+                }
+                MovementAction::LongJumpStart => {
+                    linear_velocity.y = 12.;
                 }
 
             }

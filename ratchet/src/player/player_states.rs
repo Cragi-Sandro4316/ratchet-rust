@@ -10,11 +10,11 @@ impl Plugin for PlayerStatePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (
                 update_grounded,
-                keyboard_input,
+                //keyboard_input,
                 gamepad_input,
                 handle_wrench_swing,
                 remove_hitbox,
-                //handle_gliding
+                handle_gliding
             ).chain()
         );
     }
@@ -28,6 +28,9 @@ pub struct Jump;
 pub struct DoubleJump;
 
 #[derive(Component)]
+pub struct HighJump;
+
+#[derive(Component)]
 pub struct Falling;
 
 #[derive(Component)]
@@ -35,6 +38,9 @@ pub struct Gliding;
 
 #[derive(Component)]
 pub struct Walking;
+
+#[derive(Component)]
+pub struct Crouch;
 
 #[derive(Component)]
 pub struct Idle;
@@ -50,22 +56,52 @@ pub struct Hitbox;
 #[derive(Component)]
 pub struct Damage(pub f32);
 
+#[derive(Component)]
+pub struct Direction(pub Vec2);
+
+#[derive(Component)]
+pub struct LongJump;
 
 /// Sends [`MovementAction`] events based on keyboard input.
 fn keyboard_input(
     mut movement_event_writer: EventWriter<MovementAction>,
     keyboard_input: Res<Input<KeyCode>>,
     camera: Query<&Transform, With<MovementHelper>>,
-    mut player: Query<(Entity, &mut Transform, Has<Swing1>), (With<CharacterController>, Without<MovementHelper>)>,
-
+    mut player: Query<(
+        Entity, 
+        &mut Transform,
+        &mut Direction, 
+        Has<Swing1>, 
+        Has<Grounded>,
+        Has<Falling>,
+        Has<Jump>,
+        Has<DoubleJump>,
+        Has<Crouch>,
+        Has<HighJump>,
+        Has<LongJump>,
+        &JumpCounter
+    ), (With<CharacterController>, Without<MovementHelper>)>,
     mouse_input: Res<Input<MouseButton>>,
 
     mut commands: Commands,
     time: Res<Time>
 ) {
     let Ok(camera_transform) = camera.get_single() else {return;};
-    let Ok((player_entity, mut player_transform, is_swinging)) = player.get_single_mut() else {return;};
+    let Ok((player_entity, 
+        mut player_transform,
+        mut direction, 
+        is_swinging, 
+        is_grounded,
+        is_falling,
+        is_jumping,
+        is_double_jumping,
+        is_crouching,
+        is_high_jumping,
+        is_long_jumping,
+        jump_counter
+    )) = player.get_single_mut() else {return;};
 
+    // calculates direction
     let up = keyboard_input.any_pressed([KeyCode::W, KeyCode::Up]);
     let down = keyboard_input.any_pressed([KeyCode::S, KeyCode::Down]);
     let left = keyboard_input.any_pressed([KeyCode::A, KeyCode::Left]);
@@ -73,15 +109,15 @@ fn keyboard_input(
 
     let vertical = (up as i8 - down as i8) as f32 * Vec2::new(camera_transform.forward().x, -camera_transform.forward().z);
     let horizontal =  (right as i8 - left as i8) as f32 * Vec2::new(camera_transform.right().x, -camera_transform.right().z);
-
-    let mut direction = Vec2::ZERO;
    
     if !is_swinging {
-        direction = horizontal + vertical;
+        direction.0 = horizontal + vertical;
     }
 
-
-    if direction == Vec2::ZERO {
+    // if the player is idle it doesn't move,
+    // else it looks in the direction and 
+    // if it's not crouching it moves
+    if direction.0 == Vec2::ZERO {
         commands.entity(player_entity).insert(Idle);
         commands.entity(player_entity).remove::<Walking>();
 
@@ -91,21 +127,23 @@ fn keyboard_input(
                 player_transform.forward().z
             ).normalize();
             
-            movement_event_writer.send(MovementAction::Move(swing_direction / 4.));
+            movement_event_writer.send(MovementAction::Swing1(swing_direction / 4.));
         }
     }
     else {
         
-        let look_at = player_transform.translation + Vec3::new(-direction.x, 0., direction.y);
+        let look_at = player_transform.translation + Vec3::new(-direction.0.x, 0., direction.0.y);
         player_transform.look_at(look_at, Vec3::Y);
-        commands.entity(player_entity).insert(Walking);
-        commands.entity(player_entity).remove::<Idle>();
-        movement_event_writer.send(MovementAction::Swing1(direction));
-    
+        
+        if !is_crouching {
+            commands.entity(player_entity).insert(Walking);
+            commands.entity(player_entity).remove::<Idle>();
+            movement_event_writer.send(MovementAction::Move(direction.0));
+        }
     }
     
-
-    if mouse_input.any_just_pressed([MouseButton::Left]) && !is_swinging {
+    // wrench swing
+    if mouse_input.any_just_pressed([MouseButton::Middle]) && !is_swinging {
             
         // inserts the swing state
         commands.entity(player_entity).insert(Swing1{
@@ -135,12 +173,58 @@ fn keyboard_input(
         commands.entity(hitbox).insert(hitbox_position);
     }
 
+    
 
-    if keyboard_input.any_just_pressed([KeyCode::Space]) {
-        movement_event_writer.send(MovementAction::Jump);
-        commands.entity(player_entity).insert(Jump);
-        
+    // crouch
+    if keyboard_input.pressed(KeyCode::ShiftLeft) && is_grounded {
+        commands.entity(player_entity).insert(Crouch);
     }
+    else {
+        commands.entity(player_entity).remove::<Crouch>();
+    }
+
+    // Jumps and HighJump
+    if !is_crouching {
+        if keyboard_input.just_pressed(KeyCode::Space) {
+            if jump_counter.counter == 0. && is_grounded {
+                commands.entity(player_entity).insert(Jump);
+                movement_event_writer.send(MovementAction::Jump);
+            }
+            else {
+                if jump_counter.counter < 2. && jump_counter.counter > 0.
+                && time.elapsed_seconds() < jump_counter.jump_time + 0.67  {
+                    movement_event_writer.send(MovementAction::DoubleJump);
+                    commands.entity(player_entity).remove::<Jump>();
+                    commands.entity(player_entity).insert(DoubleJump);
+                    
+                }
+                
+            }
+        }
+    } else {
+        if keyboard_input.just_pressed(KeyCode::Space) {
+            if direction.0 == Vec2::ZERO {
+                commands.entity(player_entity).insert(HighJump);
+                movement_event_writer.send(MovementAction::HighJump);
+            }
+            else {
+                commands.entity(player_entity).insert(LongJump);
+                movement_event_writer.send(MovementAction::LongJump(direction.0));
+            }
+        }
+
+    }
+
+    // gliding
+    if is_falling && !is_jumping && !is_double_jumping && !is_high_jumping {
+        if keyboard_input.pressed(KeyCode::Space) {
+            commands.entity(player_entity).insert(Gliding);
+        }
+        else {
+            commands.entity(player_entity).remove::<Gliding>();
+        }
+    }
+
 }
 
 
@@ -156,11 +240,16 @@ fn gamepad_input(
     mut player: Query<(
         Entity, 
         &mut Transform, 
+        &mut Direction,
         Has<Swing1>, 
         Has<Grounded>,
         Has<Falling>,
         Has<Jump>,
         Has<DoubleJump>,
+        Has<Crouch>,
+        Has<HighJump>,
+        Has<LongJump>,
+
         &JumpCounter
     ), (With<CharacterController>, Without<MovementHelper>)>,
     mut commands: Commands,
@@ -171,11 +260,16 @@ fn gamepad_input(
     let Ok(camera_transform) = camera.get_single() else {return;};
     let Ok((player_entity, 
         mut player_transform, 
+        mut direction,
         is_swinging, 
         is_grounded,
         is_falling,
         is_jumping,
         is_double_jumping,
+        is_crouching,
+        is_high_jumping,
+        is_long_jumping,
+        
         jump_counter
     )) = player.get_single_mut() else {return;};
 
@@ -189,30 +283,30 @@ fn gamepad_input(
             axis_type: GamepadAxisType::LeftStickY,
         };
 
-        let mut direction: Vec2 = Vec2::ZERO;
+        
 
         // if ratchet is not swinging the wrench it takes the direction input
-        if !is_swinging {
+        if !is_swinging && !is_long_jumping {
             if let (Some(x), Some(y)) = (axes.get(axis_lx), axes.get(axis_ly)) {
 
                 let mut vertical = Vec2::ZERO;
                 let mut horizontal = Vec2::ZERO;
-                if x > 0.2 || x < -0.2 {
+                if x > 0.3 || x < -0.3 {
                     horizontal =  x * Vec2::new(camera_transform.right().x, -camera_transform.right().z);
                 }
     
-                if y > 0.2 || y < -0.2 {
+                if y > 0.3 || y < -0.3 {
                     vertical = y * Vec2::new(camera_transform.forward().x, -camera_transform.forward().z);
                 }
 
-                direction = horizontal + vertical;
+                direction.0 = horizontal + vertical;
 
             }
         }
         
         
-        
-        if direction == Vec2::ZERO {
+        // moves the player
+        if direction.0 == Vec2::ZERO {
             commands.entity(player_entity).insert(Idle);
             commands.entity(player_entity).remove::<Walking>();
 
@@ -222,22 +316,35 @@ fn gamepad_input(
                     player_transform.forward().z
                 ).normalize();
                 
-                movement_event_writer.send(MovementAction::Move(swing_direction / 4.));
+                movement_event_writer.send(MovementAction::Swing1(swing_direction / 4.));
             }
         }
         else {
             
-            let look_at = player_transform.translation + Vec3::new(-direction.x, 0., direction.y);
+            let look_at = player_transform.translation + Vec3::new(-direction.0.x, 0., direction.0.y);
             player_transform.look_at(look_at, Vec3::Y);
-            commands.entity(player_entity).insert(Walking);
-            commands.entity(player_entity).remove::<Idle>();
-            movement_event_writer.send(MovementAction::Swing1(direction));
-        
+            
+            if !is_crouching && !is_long_jumping {
+                commands.entity(player_entity).insert(Walking);
+                commands.entity(player_entity).remove::<Idle>();
+                movement_event_writer.send(MovementAction::Move(direction.0));
+            }
         }
 
 
+        // crouch
+        let crouch_button = GamepadButton {
+            gamepad,
+            button_type: GamepadButtonType::RightTrigger,
+        };
+        if buttons.pressed(crouch_button) && is_grounded {
+            commands.entity(player_entity).insert(Crouch);
+        }
+        else {
+            commands.entity(player_entity).remove::<Crouch>();
+        }
 
-
+        // wrench swing
         let wrench_button = GamepadButton {
             gamepad,
             button_type: GamepadButtonType::West,
@@ -255,7 +362,6 @@ fn gamepad_input(
             // creates a collider that interacts only with hittable entities
             let hitbox = commands.spawn((
                 Collider::cylinder(0.5, 1.2),
-                CollisionLayers::new([Layer::Player], [Layer::Hittable]),
                 Hitbox,
                 Damage(1.)
             )).id(); 
@@ -273,34 +379,58 @@ fn gamepad_input(
             commands.entity(hitbox).insert(hitbox_position);
         }
 
-
+        // jumps and high jumps
         let jump_button = GamepadButton {
             gamepad,
             button_type: GamepadButtonType::South,
         };
 
-        if buttons.just_pressed(jump_button) {
-            if jump_counter.counter == 0. && is_grounded {
-                commands.entity(player_entity).insert(Jump);
-                movement_event_writer.send(MovementAction::Jump);
-            }
-            else {
-                commands.entity(player_entity).remove::<Jump>();
-                if jump_counter.counter < 2. && jump_counter.counter > 0.
-                && time.elapsed_seconds() < jump_counter.jump_time + 0.85  {
-                    movement_event_writer.send(MovementAction::DoubleJump);
-                    
-                    commands.entity(player_entity).remove::<Jump>();
-                    commands.entity(player_entity).insert(DoubleJump);
+        if !is_crouching {
+            if buttons.just_pressed(jump_button) {
+                if jump_counter.counter == 0. && is_grounded {
+                    commands.entity(player_entity).insert(Jump);
+                    movement_event_writer.send(MovementAction::Jump);
+                }
+                else {
+                    if jump_counter.counter < 2. && jump_counter.counter > 0.
+                    && time.elapsed_seconds() < jump_counter.jump_time + 0.67  {
+                        movement_event_writer.send(MovementAction::DoubleJump);
+                        commands.entity(player_entity).remove::<Jump>();
+                        commands.entity(player_entity).insert(DoubleJump);
+                        
+                    }
                     
                 }
-
             }
+        } else {
+            if buttons.just_pressed(jump_button) {
+                if direction.0 == Vec2::ZERO {
+                    commands.entity(player_entity).insert(HighJump);
+                    movement_event_writer.send(MovementAction::HighJump);
+                }
+                else {
+                    commands.entity(player_entity).insert(LongJump);
+                    movement_event_writer.send(MovementAction::LongJumpStart);
+
+                }   
+            }
+            
+
         }
 
-        if is_falling && !is_jumping && !is_double_jumping {
+        println!("{}", direction.0);
+        if is_long_jumping {
+            movement_event_writer.send(MovementAction::LongJump(direction.0));
+
+        }
+
+        // gliding
+        if is_falling && !is_jumping && !is_double_jumping && !is_high_jumping && !is_long_jumping {
             if buttons.pressed(jump_button) {
                 commands.entity(player_entity).insert(Gliding);
+            }
+            else {
+                commands.entity(player_entity).remove::<Gliding>();
             }
         }
 
@@ -371,10 +501,11 @@ fn update_grounded(
 
             // waits half a second after a jump before resetting the counter 
             // to avoid the counter being reset on the first jump frame
-            if time.elapsed_seconds() > jump_counter.jump_time + 0.7 {
+            if time.elapsed_seconds() > jump_counter.jump_time + 0.3 {
                 jump_counter.counter = 0.;
-                commands.entity(entity).remove::<Jump>();
-                commands.entity(entity).remove::<DoubleJump>();
+                commands.entity(entity).remove::<Falling>();
+                commands.entity(entity).remove::<Gliding>();
+
             }
 
         } else {
@@ -389,15 +520,13 @@ fn update_grounded(
 }
 
 
-// fn handle_gliding(
-//     mut player_q: Query<(Has<Gliding>, &mut GravityScale), With<CharacterController>>
-// ) {
-//     let Ok((is_gliding, mut gravity)) = player_q.get_single_mut() else {return;};
+fn handle_gliding(
+    mut player_q: Query< &mut LinearVelocity, (With<CharacterController>, With<Gliding>, Without<DoubleJump>)>
+) {
+    let Ok(mut linear_velocity) = player_q.get_single_mut() else {return;};
 
-//     if is_gliding {
-//         gravity.0 = 1.5;
-//     }
-//     else {
-//         gravity.0 = 3.;
-//     }
-// }
+    linear_velocity.y = -1.25;
+    linear_velocity.x *= 0.95;
+    linear_velocity.z *= 0.95;
+    
+}

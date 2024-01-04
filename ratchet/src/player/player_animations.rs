@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{player::{CurrentAnimation, CharacterController, JumpCounter, PlayerAnimations, Grounded, self}, player_states::*};
+use crate::{player::{CurrentAnimation, CharacterController, PlayerAnimations, Grounded}, player_states::*};
 
 pub struct PlayerAnimationsPlugin; 
 
@@ -24,7 +24,7 @@ fn play_animations(
 
     player_q: Query<Entity, With<CharacterController>>,
     mut commands: Commands,
-    parent_query: Query<&Parent>
+    parent_query: Query<&Parent>,
 ) {
     let Ok(animation) = animation_event.get_single() else {return;};
     let Ok(player_entity) = player_q.get_single() else {return;};
@@ -36,6 +36,8 @@ fn play_animations(
                 if commands.entity(grandparent).id() == commands.entity(player_entity).id() {
                     match animation.0.as_str() {
                                 "IDLE" => {
+                                    commands.entity(player_entity).remove::<HighJump>();
+                                    commands.entity(player_entity).remove::<DoubleJump>();
                                     anim_player.play(animations.0[3].clone_weak()).repeat();
                     
                                 }
@@ -52,14 +54,34 @@ fn play_animations(
                                     }
                                 }
                                 "WALK" => {
-                                    anim_player.play(animations.0[7].clone_weak()).repeat();
-                                    println!("bb");
+                                    commands.entity(player_entity).remove::<HighJump>();
+                                    commands.entity(player_entity).remove::<DoubleJump>();
+                                    anim_player.play(animations.0[9].clone_weak()).repeat();
                                     
                                 }
                                 "SWING1" => {
-                                    anim_player.play(animations.0[6].clone_weak());
+                                    anim_player.play(animations.0[8].clone_weak());
                                 }
-                                
+                                "GLIDE" => {
+                                    anim_player.play(animations.0[2].clone_weak()).repeat();
+                                }
+                                "CROUCH" => {
+                                    anim_player.play(animations.0[0].clone_weak());
+                                }
+                                "HIGHJUMP" => {
+                                    anim_player.play(animations.0[6].clone_weak());
+                                    if anim_player.is_finished() {
+                                        commands.entity(player_entity).remove::<HighJump>();
+
+                                    }
+                                }
+                                "LONGJUMP" => {
+                                    anim_player.play(animations.0[5].clone_weak());
+                                    
+                                    if anim_player.is_finished() {
+                                        commands.entity(player_entity).remove::<LongJump>();
+                                    }
+                                }
                                 _ => {}
                             }
                 }
@@ -83,6 +105,10 @@ pub fn animation_selector(
         Has<Swing1>,
         Has<Falling>,
         Has<Grounded>,
+        Has<Gliding>,
+        Has<Crouch>,
+        Has<HighJump>,
+        Has<LongJump>,
         &mut CurrentAnimation
     ), With<CharacterController>>
 ) {
@@ -94,20 +120,35 @@ pub fn animation_selector(
         is_swinging,
         is_falling,
         is_grounded,
+        is_gliding,
+        is_crouching,
+        is_high_jumping,
+        is_long_jumping,
         mut current_animation
     )) = player_query.get_single_mut() else {return;};
 
 
     if !is_grounded {
-        if is_jumping {
+        if is_long_jumping {
+            current_animation.0 = "LONGJUMP".to_owned();
+        }
+        else if is_high_jumping {
+            current_animation.0 = "HIGHJUMP".to_owned();
+        }
+        else if is_jumping {
             current_animation.0 = "JUMP".to_owned();
+
         }
         else if is_double_jumping {
-            println!("aaa");
             current_animation.0 = "DOUBLEJUMP".to_owned();
         } 
         else if is_falling {
-            current_animation.0 = "JUMP".to_owned();
+            if is_gliding {
+                current_animation.0 = "GLIDE".to_owned();
+            }
+            else {
+                current_animation.0 = "JUMP".to_owned();
+            }
         }
 
     } else {
@@ -115,12 +156,16 @@ pub fn animation_selector(
             current_animation.0 = "SWING1".to_owned();
         }
         else {
-            if is_walking {
+             if is_crouching {
+                current_animation.0 = "CROUCH".to_owned();
+            }
+            else if is_walking {
                 current_animation.0 = "WALK".to_owned();
             }
             else if is_idle {
                 current_animation.0 = "IDLE".to_owned();
             }
+            
         }
     }
 

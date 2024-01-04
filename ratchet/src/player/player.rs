@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_xpbd_3d::{math::*, prelude::*};
 
-use crate::{ player_animations::PlayerAnimationsPlugin, player_movement::PlayerMovementPlugin, player_states::PlayerStatePlugin};
+use crate::{ player_animations::PlayerAnimationsPlugin, player_movement::PlayerMovementPlugin, player_states::*};
 
 pub struct CharacterControllerPlugin;
 
@@ -33,6 +33,9 @@ pub enum MovementAction {
     Move(Vector2),
     Jump,
     DoubleJump,
+    HighJump,
+    LongJump(Vector2),
+    LongJumpStart,
     Swing1(Vector2),
 }
 
@@ -182,6 +185,8 @@ fn spawn_player(
         assets.load("og_ratchet.glb#Animation5"),
         assets.load("og_ratchet.glb#Animation6"),
         assets.load("og_ratchet.glb#Animation7"),
+        assets.load("og_ratchet.glb#Animation8"),
+        assets.load("og_ratchet.glb#Animation9"),
 
 
         // other animations here
@@ -191,7 +196,7 @@ fn spawn_player(
     commands.spawn((
         SceneBundle {
             scene: assets.load("og_ratchet.glb#Scene0"),
-            transform: Transform::from_xyz(0.0, 1.5, 0.0),
+            transform: Transform::from_xyz(0.0, 5.5, 0.0),
             ..default()
         },
         CharacterControllerBundle::new(Collider::capsule(1.2, 0.4)).with_movement(
@@ -210,6 +215,7 @@ fn spawn_player(
             jump_time: -1.
         },
         CurrentAnimation("IDLE".to_owned()),
+        Direction(Vec2::ZERO),
         Bolts(0)        
     ));
 }
