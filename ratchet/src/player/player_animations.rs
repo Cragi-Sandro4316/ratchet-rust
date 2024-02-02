@@ -55,7 +55,6 @@ fn play_animations(
                                 }
                                 "WALK" => {
                                     commands.entity(player_entity).remove::<HighJump>();
-                                    commands.entity(player_entity).remove::<DoubleJump>();
                                     anim_player.play(animations.0[9].clone_weak()).repeat();
                                     
                                 }
@@ -80,6 +79,14 @@ fn play_animations(
                                     
                                     if anim_player.is_finished() {
                                         commands.entity(player_entity).remove::<LongJump>();
+                                    }
+                                }
+                                "SIDEFLIP" => {
+                                    anim_player.play(animations.0[7].clone_weak());
+                                    if anim_player.is_finished() {
+                                        commands.entity(player_entity).remove::<SideFlip>();
+                                        commands.entity(player_entity).insert(Falling);
+
                                     }
                                 }
                                 _ => {}
@@ -109,6 +116,7 @@ pub fn animation_selector(
         Has<Crouch>,
         Has<HighJump>,
         Has<LongJump>,
+        Has<SideFlip>,
         &mut CurrentAnimation
     ), With<CharacterController>>
 ) {
@@ -124,6 +132,7 @@ pub fn animation_selector(
         is_crouching,
         is_high_jumping,
         is_long_jumping,
+        is_sideflipping,
         mut current_animation
     )) = player_query.get_single_mut() else {return;};
 
@@ -131,6 +140,10 @@ pub fn animation_selector(
     if !is_grounded {
         if is_long_jumping {
             current_animation.0 = "LONGJUMP".to_owned();
+        }
+        else if is_sideflipping {
+            current_animation.0 = "SIDEFLIP".to_owned();
+
         }
         else if is_high_jumping {
             current_animation.0 = "HIGHJUMP".to_owned();

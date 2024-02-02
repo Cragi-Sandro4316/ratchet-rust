@@ -34,8 +34,9 @@ pub enum MovementAction {
     Jump,
     DoubleJump,
     HighJump,
-    LongJump(Vector2),
-    LongJumpStart,
+    LongJump,
+    LongJumpStart(Vector2),
+    SideFlip(Vector2),
     Swing1(Vector2),
 }
 
@@ -216,7 +217,8 @@ fn spawn_player(
         },
         CurrentAnimation("IDLE".to_owned()),
         Direction(Vec2::ZERO),
-        Bolts(0)        
+        Bolts(0),
+        
     ));
 }
 

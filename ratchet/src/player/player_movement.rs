@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_xpbd_3d::{components::LinearVelocity, math::AdjustPrecision};
 
-use crate::player::*;
+use crate::{player::*, player_states::{LongJump, SideFlip}};
 
 pub struct PlayerMovementPlugin;
 
@@ -41,7 +41,6 @@ fn movement(
                 MovementAction::Move(direction) => {
                     linear_velocity.x += direction.x * movement_acceleration.0 * delta_time;
                     linear_velocity.z -= direction.y * movement_acceleration.0 * delta_time;
-                
                 }
                 MovementAction::Jump => {
                     jump_counter.jump_time = time.elapsed_seconds();
@@ -56,22 +55,42 @@ fn movement(
 
                 }
                 MovementAction::Swing1(direction) => {
-                    linear_velocity.x += direction.x * movement_acceleration.0 * delta_time;
-                    linear_velocity.z -= direction.y * movement_acceleration.0 * delta_time;
+                    linear_velocity.x = direction.x * movement_acceleration.0 * delta_time;
+                    linear_velocity.z = -direction.y * movement_acceleration.0 * delta_time;
                 
                 }
                 MovementAction::HighJump => {
                     linear_velocity.y = 16.;
                 }
-                MovementAction::LongJump(direction) => {
+                MovementAction::LongJump => {
+                    
+                    linear_velocity.x = linear_velocity.x * 1.087;
+                    linear_velocity.z = linear_velocity.z * 1.087;
+                    
 
-                    linear_velocity.x += direction.x * movement_acceleration.0 * 2.0 * time.delta_seconds() ;
-                    linear_velocity.z -= direction.y * movement_acceleration.0 * 2.0 * time.delta_seconds();
                 }
-                MovementAction::LongJumpStart => {
+                MovementAction::LongJumpStart(direction) => {
+                    jump_counter.jump_time = time.elapsed_seconds();
                     linear_velocity.y = 12.;
-                }
 
+                    
+
+                    if *direction != Vec2::ZERO {
+                        linear_velocity.x += direction.x * 11.5;
+                        linear_velocity.z -= direction.y * 11.5;
+                    }
+                    else {
+                        linear_velocity.x += linear_velocity.x * 2.;
+                        linear_velocity.z += linear_velocity.z * 2.;
+                    }
+                    
+                }
+                MovementAction::SideFlip(direction) => {
+                    linear_velocity.y = 12.;
+                    linear_velocity.x +=  linear_velocity.x * 1.3 + direction.x * 4.;
+                    linear_velocity.z +=  linear_velocity.z * 1.3 + direction.y * 4.;
+
+                }
             }
 
         }
@@ -81,10 +100,31 @@ fn movement(
 
 
 /// Slows down movement in the XZ plane.
-fn apply_movement_damping(mut query: Query<(&MovementDampingFactor, &mut LinearVelocity)>) {
+fn apply_movement_damping(
+    mut query: Query<(&MovementDampingFactor, &mut LinearVelocity)>,
+    player: Query<
+        (
+            Has<Grounded>,
+            Has<LongJump>,
+            Has<SideFlip>
+        ), 
+        With<CharacterController>
+    >
+) {
+    let Ok((is_grounded, is_longjumping, is_sideflipping)) = player.get_single() else {return;};
     for (damping_factor, mut linear_velocity) in &mut query {
         // We could use `LinearDamping`, but we don't want to dampen movement along the Y axis
-        linear_velocity.x *= damping_factor.0;
-        linear_velocity.z *= damping_factor.0;
+        
+       
+        if is_grounded || is_longjumping {
+            linear_velocity.x *= damping_factor.0;
+            linear_velocity.z *= damping_factor.0;
+        }
+        else if !is_sideflipping {            
+            linear_velocity.x *= 0.94 ;
+            linear_velocity.z *= 0.94 ;
+        }
+    
     }
+
 }

@@ -1,6 +1,4 @@
-use std::f32::consts::PI;
-
-use bevy::{prelude::*, pbr::CascadeShadowConfigBuilder};
+use bevy::prelude::*;
 use bevy_xpbd_3d::{
     components::{
         ComputedCollider, 
@@ -10,7 +8,6 @@ use bevy_xpbd_3d::{
         CoefficientCombine, 
         Mass
     }, 
-    prelude::PhysicsLayer, 
     plugins::collision::Collisions
 };
 
@@ -35,12 +32,7 @@ impl Plugin for PlatformPlugin {
 #[derive(Component)]
 pub struct CrateHealth(pub f32);
 
-#[derive(PhysicsLayer)]
-pub enum Layer {
-    Hittable,
-    //Hitbox,
-    Player
-}
+
 
 // array containing all player animations
 #[derive(Resource)]
@@ -60,35 +52,31 @@ fn spawn_terrain(
 
 ) {
 
-    // sun
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            shadows_enabled: true,
+
+    commands
+        .spawn(PointLightBundle {
+            // transform: Transform::from_xyz(5.0, 8.0, 2.0),
+            transform: Transform {
+                translation: Vec3::new(75., 635., 0.),
+                ..default()
+            },
+            point_light: PointLight {
+                intensity: 17000000.0, // lumens - roughly a 100W non-halogen incandescent bulb
+                color: Color::WHITE,
+                range: 10000.0,
+                shadows_enabled: false,
+                ..default()
+            },
             ..default()
-        },
-        transform: Transform {
-            translation: Vec3::new(0.0, 2.0, 0.0),
-            rotation: Quat::from_rotation_x(-PI / 4.),
-            ..default()
-        },
-        // The default cascade config is designed to handle large scenes.
-        // As this example has a much smaller world, we can tighten the shadow
-        // bounds for better visual quality.
-        cascade_shadow_config: CascadeShadowConfigBuilder {
-            first_cascade_far_bound: 4.0,
-            maximum_distance: 10.0,
-            ..default()
-        }
-        .into(),
-        ..default()
-    });
+        });
 
 
     // terrain
     commands.spawn((
         SceneBundle {
-            scene: assets.load("./character_controller2.glb#Scene0"),
+            scene: assets.load("./metropolis_collisions.glb#Scene0"),
             transform: Transform::from_rotation(Quat::from_rotation_y(-std::f32::consts::PI * 0.5)),
+            visibility: Visibility::Hidden,
             ..default()
         },
         
@@ -96,6 +84,15 @@ fn spawn_terrain(
         RigidBody::Static,
     ));
     
+    commands.spawn((
+        SceneBundle {
+            scene: assets.load("./metropolis.glb#Scene0"),
+            transform: Transform::from_rotation(Quat::from_rotation_y(-std::f32::consts::PI * 0.5)),
+            ..default()
+        },
+        
+        RigidBody::Static,
+    ));
 
 
     // A cube to move around
@@ -177,6 +174,15 @@ fn spawn_terrain(
 
     ));
 
+
+
+    commands.spawn(
+        SceneBundle {
+            scene: assets.load("./blastatore.glb#Scene0"),
+            transform: Transform::from_xyz(3.0, 5.0, 3.0).with_scale(Vec3::splat(1.)),
+            ..default()
+        }
+    );
     
 }
 

@@ -12,8 +12,7 @@ impl Plugin for CameraPlugin_ {
             .add_systems(Update, (
                 update_camera_pos, 
                 orbit_camera, 
-                hide_cursor
-                
+                hide_cursor,
             ));
     }
 }
@@ -31,8 +30,9 @@ pub struct CursorVisible(bool);
 #[derive(Component)]
 pub struct MovementHelper;
 
+
 fn spawn_camera(
-    mut commands: Commands
+    mut commands: Commands,
 ) {
     commands.spawn((
         Camera3dBundle {
@@ -51,6 +51,8 @@ fn spawn_camera(
     ));
 
     commands.spawn((MovementHelper, Transform::default()));
+    
+    
 }
 
 const CAMERA_DISTANCE: f32 = 7.;
@@ -82,7 +84,10 @@ fn orbit_camera(
     
     // mouse
     for position in mouse_position.read() {
+        
         angle.x += position.delta.x  * 0.005;
+        
+
         angle.y += position.delta.y  * 0.005;
 
     }
@@ -99,6 +104,7 @@ fn orbit_camera(
         };
 
         if let (Some(x), Some(y)) = (axes.get(axis_lx), axes.get(axis_ly)) {
+            
             angle.x += x  * 0.02;
 
             angle.y += y  * 0.02;
@@ -107,6 +113,16 @@ fn orbit_camera(
         }
     }
 
+    if angle.x > 6.33 || angle.x < -6.32 {
+        angle.x = 0.;
+    }
+
+    // if angle.x > 3.14 {
+    //     angle.x *= -1.;
+    // }
+    // else if angle.x < -3.14 {
+    //     angle.x *= -1.;
+    // }
 
     // uses sine and cosine to calculate the distance of the camera from the player
     let x = player_transform.translation.x + CAMERA_DISTANCE  * f32::cos(angle.x) ; 
@@ -122,6 +138,13 @@ fn orbit_camera(
     camera_transform.translation.z = z;
 
 }
+
+
+
+
+
+
+
 
 fn hide_cursor(
     mut window: Query<&mut Window, With<PrimaryWindow>>,
@@ -146,3 +169,7 @@ fn hide_cursor(
     }
 
 }
+
+
+
+
