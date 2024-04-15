@@ -52,6 +52,9 @@ fn spawn_terrain(
     commands.spawn((
         SceneBundle {
             scene: assets.load("./insomniac_museum_collisions.glb#Scene0"),
+            //scene: assets.load("./metropolis_collisions.glb#Scene0"),
+            //scene: assets.load("./veldin_collisions.glb#Scene0"),
+            
             transform: Transform::from_rotation(Quat::from_rotation_y(-std::f32::consts::PI * 0.5)),
             visibility: Visibility::Hidden,
             ..default()
@@ -64,6 +67,9 @@ fn spawn_terrain(
     commands.spawn((
         SceneBundle {
             scene: assets.load("./insomniac_museum.glb#Scene0"),
+            //scene: assets.load("./metropolis.glb#Scene0"),
+            //scene: assets.load("./veldin.glb#Scene0"),
+
             transform: Transform::from_rotation(Quat::from_rotation_y(-std::f32::consts::PI * 0.5)),
             ..default()
         },

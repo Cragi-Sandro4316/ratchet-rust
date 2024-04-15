@@ -68,6 +68,29 @@ fn play_animations(
                     animation_player.play_with_transition(animations.0[2].clone_weak(), Duration::from_millis(150)).repeat();
 
                 }
+                Animation::Crouch => {
+                    animation_player.play_with_transition(animations.0[0].clone_weak(), Duration::from_millis(150));
+                }
+                Animation::SideFlipL => {
+                    animation_player.play_with_transition(animations.0[8].clone_weak(), Duration::from_millis(150));
+                    if animation_player.is_finished() {
+                        commands.entity(player).remove::<SideflipL>();
+                    }
+                }
+                Animation::SideFlipR => {
+                    animation_player.play_with_transition(animations.0[9].clone_weak(), Duration::from_millis(150));
+                    if animation_player.is_finished() {
+                        commands.entity(player).remove::<SideflipR>();
+                    }
+                }
+                Animation::Longjump => {
+                    animation_player.play_with_transition(animations.0[7].clone_weak(), Duration::from_millis(150));
+                    
+                }
+                Animation::Highjump => {
+                    animation_player.play_with_transition(animations.0[3].clone_weak(), Duration::from_millis(150));
+                    
+                }
             }
         }
     }
@@ -83,7 +106,12 @@ fn animation_selector(
         Has<Grounded>,
         Has<Falling>,
         Has<Jump>,
-        Has<DoubleJump>
+        Has<DoubleJump>,
+        Has<Crouch>,
+        Has<SideflipL>,
+        Has<SideflipR>,
+        Has<Longjump>,
+        Has<Highjump>
     ), With<CharacterController>>
 ) {
     let Ok((
@@ -94,12 +122,20 @@ fn animation_selector(
         grounded,
         falling,
         jumping,
-        doublejumping
+        doublejumping,
+        crouching,
+        sideflip_l,
+        sideflip_r,
+        longjump,
+        highjump
     )) = states.get_single_mut() else {return;};
 
 
     if grounded {
-        if walking {
+        if crouching {
+            current_animation.0 = Animation::Crouch;
+        }
+        else if walking {
             current_animation.0 = Animation::Walk;
             
         }
@@ -112,7 +148,22 @@ fn animation_selector(
         
     }
     else {
-        if jumping {
+        if sideflip_l {
+            current_animation.0 = Animation::SideFlipL;
+        }
+        else if sideflip_r {
+            current_animation.0 = Animation::SideFlipR;
+
+        }
+        else if longjump {
+            current_animation.0 = Animation::Longjump;
+
+        }
+        else if highjump {
+            current_animation.0 = Animation::Highjump;
+
+        }
+        else if jumping {
             current_animation.0 = Animation::Jump;
         }
         else if doublejumping {

@@ -18,8 +18,9 @@ pub struct CameraIdentifier {
 }
 
 fn spawn_camera(
-    mut commands: Commands
+    mut commands: Commands,
 ) {
+
     commands.spawn((
         Camera3dBundle {
             transform: Transform::from_xyz(0., 5., 5.).looking_at(Vec3::ZERO, Vec3::Y),
@@ -29,10 +30,13 @@ fn spawn_camera(
             x: 0.,
             y: 0.
         },
+        
     ));
 }
 
-const CAMERA_DISTANCE: f32 = 6.5;
+const CAMERA_DISTANCE: f32 = 4.5;
+const CAMERA_HEIGHT: f32 = 5.;
+
 
 fn update_camera_position(
     mut camera: Query<(&mut Transform, &mut CameraIdentifier)>,
@@ -73,15 +77,18 @@ fn update_camera_position(
 
 
     // if the camera has done a full circle around the player it resets the angle 
-    if camera_angle.x > 6.28319 || camera_angle.x < -6.28319 {
+    if camera_angle.x > 6.28319 {
         camera_angle.x = 0.;
     }
+    else if camera_angle.x < 0. {
+        camera_angle.x += 6.28319;
 
+    }
 
     // calculates the camera position through trigonometry and adds the player position to it
     let x = target_transform.translation.x + CAMERA_DISTANCE * f32::cos(camera_angle.x); 
     let z = target_transform.translation.z + CAMERA_DISTANCE * f32::sin(camera_angle.x);
-    let y = target_transform.translation.y + CAMERA_DISTANCE * f32::sin(camera_angle.y); 
+    let y = target_transform.translation.y + CAMERA_HEIGHT * f32::sin(camera_angle.y); 
 
     camera_transform.translation.x = x;
     camera_transform.translation.y = y;

@@ -26,7 +26,11 @@ pub enum MovementAction {
     Walk(Vec2),
     Jump,
     DoubleJump,
-    Gliding
+    Gliding,
+    Sideflip(Vec2),
+    Longjump(Vec2),
+    Highjump1,
+    Highjump2
 }
 
 pub enum Animation {
@@ -35,7 +39,12 @@ pub enum Animation {
     DoubleJump,
     Land,
     Walk,
-    Fall
+    Fall,
+    Crouch,
+    SideFlipL,
+    SideFlipR,
+    Longjump,
+    Highjump
 }
 
 // handle component for entities with character controller
@@ -207,7 +216,7 @@ fn spawn_player(
             transform: Transform::from_xyz(0.0, 5.5, 0.0),
             ..default()
         },
-        CharacterControllerBundle::new(Collider::capsule(1.2, 0.4)).with_movement(
+        CharacterControllerBundle::new(Collider::capsule(0.4, 0.4)).with_movement(
             65.0,
             0.92,
             11.2,

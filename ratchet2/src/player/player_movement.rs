@@ -1,7 +1,7 @@
 use bevy::prelude::*;
-use bevy_xpbd_3d::components::LinearVelocity;
+use bevy_xpbd_3d::components::{GravityScale, LinearVelocity};
 
-use crate::player::*;
+use crate::{player::*, player_input::*};
 
 pub struct PlayerMovementPlugin;
 
@@ -23,7 +23,8 @@ fn movement(
         &JumpImpulse,
         &DoubleJumpImpulse,
         &mut LinearVelocity,
-        &mut JumpCounter
+        &mut JumpCounter,
+        &mut GravityScale
     ), With<CharacterController>>
 ) {
     let Ok((
@@ -31,7 +32,8 @@ fn movement(
         jump_impulse,
         double_jump_impulse,
         mut linear_velocity,
-        mut jump_counter
+        mut jump_counter,
+        mut gravity_scale
     )) = controllers.get_single_mut() else {return;};
 
     for action in movement_event.read() {
@@ -39,6 +41,8 @@ fn movement(
             MovementAction::Walk(direction) => {
                 linear_velocity.x += direction.x * movement_acceleration.0 * time.delta_seconds();
                 linear_velocity.z += direction.y * movement_acceleration.0 * time.delta_seconds();
+
+            
 
             }
             MovementAction::Jump => {
@@ -53,11 +57,36 @@ fn movement(
             }
             MovementAction::Gliding => {
                 linear_velocity.y = -1.35;
-                linear_velocity.x *= 0.95;
-                linear_velocity.z *= 0.95;
+                linear_velocity.x *= 0.90;
+                linear_velocity.z *= 0.90;
+            }
+            MovementAction::Sideflip(direction) => {
+                linear_velocity.x += linear_velocity.x / 1.8 + direction.x * 4.;
+                linear_velocity.z += linear_velocity.z / 1.8 + direction.y * 4.;
+                linear_velocity.y = 13.5;
+
+            }
+            MovementAction::Longjump(direction) => {
+                
+                gravity_scale.0 = 1.;
+
+                linear_velocity.y = 5.5;
+                linear_velocity.x = direction.normalize().x * 14.7;
+                linear_velocity.z = direction.normalize().y * 14.7;
+
+            }
+            MovementAction::Highjump1 => {
+                gravity_scale.0 = 1.3;
+                linear_velocity.y = 6.5;
+
+            }
+            MovementAction::Highjump2 => {
+                linear_velocity.y = 3.8;
             }
         }
     }
+
+
 
 }
 
@@ -65,12 +94,31 @@ fn movement(
 
 
 fn damp_movement(
-    mut player: Query<(&MovementDampingFactor, &mut LinearVelocity), With<CharacterController>>,
+    mut player: Query<(
+        &MovementDampingFactor, 
+        &mut LinearVelocity, 
+        Has<Grounded>,
+        Has<SideflipL>,
+        Has<SideflipR>,
+        Has<Longjump>,
+        Has<Highjump>
+    ), With<CharacterController>>,
 
 ) {
-    let Ok((damping_factor, mut linear_velocity)) = player.get_single_mut() else {return;};
+    let Ok((damping_factor, mut linear_velocity, grounded, sideflip_l, sideflip_r, longjump, highjump)) = player.get_single_mut() else {return;};
 
-    linear_velocity.x *= damping_factor.0;
-    linear_velocity.z *= damping_factor.0;
+    if grounded {
+        linear_velocity.x *= damping_factor.0;
+        linear_velocity.z *= damping_factor.0;
+    }
+    else if highjump {
+        linear_velocity.x *= 0.85;
+        linear_velocity.z *= 0.85;
+    }
+    else if !sideflip_l && !sideflip_r && !longjump {
+        linear_velocity.x *= 0.927;
+        linear_velocity.z *= 0.927;
+    }
+    
 
 }
