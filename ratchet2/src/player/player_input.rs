@@ -31,6 +31,9 @@ impl Plugin for PlayerInputPlugin {
 pub struct GlideAudio;
 
 #[derive(Component)]
+pub struct Slide;
+
+#[derive(Component)]
 pub struct Idle;
 
 #[derive(Component)]
@@ -54,7 +57,6 @@ pub struct Longjump;
 #[derive(Component)]
 pub struct Highjump;
 
-
 #[derive(Component)]
 pub struct Jump;
 
@@ -73,6 +75,12 @@ pub struct Falling;
 #[derive(Component)]
 pub struct Land;
 
+#[derive(Component)]
+pub struct Swing {
+    pub swing_time: f32,
+    pub swing_number: i32
+}
+
 fn walk(
     mut player: Query<(
         Entity, 
@@ -84,7 +92,8 @@ fn walk(
         Has<SideflipR>,
         Has<Longjump>,
         Has<Strafe>, 
-        Has<Highjump>
+        Has<Slide>,
+        &Swing,
     ), With<CharacterController>>,
     camera_angle: Query<&CameraIdentifier>,
     gamepads: Res<Gamepads>,
@@ -92,12 +101,10 @@ fn walk(
     mut commands: Commands,
     mut movement_event: EventWriter<MovementAction>
 ) {
-    let Ok((player, mut direction, mut transform, grounded, crouching, sideflip_l, sideflip_r, longjump, strafe, highjump)) = player.get_single_mut() else {return;};
+    let Ok((player, mut direction, mut transform, grounded, crouching, sideflip_l, sideflip_r, longjump, strafe, slide, swing)) = player.get_single_mut() else {return;};
     
-    if sideflip_l || sideflip_r || longjump { return; }
+    if sideflip_l || sideflip_r || longjump || slide || swing.swing_number > 0 || strafe { return; }
     
-    if strafe && !highjump { return; }
-   
 
     let Ok(camera_angle) = camera_angle.get_single() else { return; };
 
@@ -125,7 +132,7 @@ fn walk(
                 let controller_angle = get_angle(controller_axes.x, controller_axes.y);
 
 
-                let target_angle = controller_angle - camera_angle.x;
+                let target_angle = controller_angle - camera_angle.0;
 
                 let target_rotation = Quat::from_rotation_y(target_angle);
 
@@ -188,7 +195,9 @@ fn strafe(
         Has<SideflipR>,
         Has<Highjump>,
         Has<Longjump>,
-        Has<Glide>
+        Has<Glide>,
+        &Swing,
+        Has<Slide>
     ), With<CharacterController>>,
     camera_angle: Query<&CameraIdentifier>,
     gamepads: Res<Gamepads>,
@@ -197,8 +206,13 @@ fn strafe(
     mut commands: Commands,
     mut movement_event: EventWriter<MovementAction>
 ) {
-    let Ok((player, mut direction, mut transform, grounded, crouching, sideflip_l, sideflip_r, highjump, longjump, glide)) = player.get_single_mut() else {return;};
-    if crouching || sideflip_l || sideflip_r || highjump || longjump || glide {return;}
+    let Ok((player, mut direction, mut transform, grounded, crouching, sideflip_l, sideflip_r, highjump, longjump, glide, swing, slide)) = player.get_single_mut() else {return;};
+    if crouching || longjump || glide || slide || sideflip_l || sideflip_r|| swing.swing_number > 0 {return;}
+
+    if highjump || glide {
+        commands.entity(player).remove::<Strafe>();
+        return;
+    }
     let Ok(camera_angle) = camera_angle.get_single() else {return;};
 
     for gamepad in gamepads.iter() {
@@ -224,7 +238,7 @@ fn strafe(
                 return;
             }
 
-            let target_rotation = Quat::from_rotation_y(-camera_angle.x + 1.5708);
+            let target_rotation = Quat::from_rotation_y(-camera_angle.0 + 1.5708);
 
             transform.rotation = transform.rotation.slerp(target_rotation, 0.13);
 
@@ -235,7 +249,7 @@ fn strafe(
 
                 let controller_angle = get_angle(controller_axes.x, controller_axes.y);
 
-                let direction_angle = -camera_angle.x + controller_angle;
+                let direction_angle = -camera_angle.0 + controller_angle;
 
 
                 direction.0 = Vec2::new(
@@ -355,7 +369,7 @@ fn sideflips(
 
                 let mut player_angle = get_angle(-direction.0.x, direction.0.y).to_degrees() + 90.;
 
-                player_angle += camera_angle.x.to_degrees();
+                player_angle += camera_angle.0.to_degrees();
 
 
                 // i don't have the slightest idea of why player_angle sometimes skyrockets beyond 720, however this solution should work. 
@@ -373,7 +387,7 @@ fn sideflips(
                 };
 
                 if crouching && buttons.just_pressed(jump) {
-                    if player_angle - controller_angle + camera_angle.x > 25. {
+                    if player_angle - controller_angle + camera_angle.0 > 25. {
                         commands.entity(entity).insert(SideflipR);
                         movement_event.send(MovementAction::Sideflip(Vec2::new(
                             transform.right().x, 
@@ -396,7 +410,7 @@ fn sideflips(
                         ));
 
                     }
-                    else if player_angle - controller_angle + camera_angle.x < -25. {
+                    else if player_angle - controller_angle + camera_angle.0 < -25. {
                         
                         
                         commands.entity(entity).insert(SideflipL);
@@ -536,7 +550,7 @@ fn longjump(
 
             let mut player_angle = get_angle(-direction.0.x, direction.0.y).to_degrees() + 90.;
 
-            player_angle += camera_angle.x.to_degrees();
+            player_angle += camera_angle.0.to_degrees();
 
 
             // i don't have the slightest idea of why player_angle sometimes skyrockets beyond 720, however this solution should work. 
@@ -557,8 +571,8 @@ fn longjump(
 
 
             if crouching && buttons.just_pressed(jump) && velocity.length() > 2. {
-                if player_angle - controller_angle + camera_angle.x < 25. 
-                && player_angle - controller_angle + camera_angle.x > -25. {
+                if player_angle - controller_angle + camera_angle.0 < 25. 
+                && player_angle - controller_angle + camera_angle.0 > -25. {
 
                     commands.entity(entity).insert(Longjump);
 
@@ -588,7 +602,7 @@ fn longjump(
             if longjumping {
                 direction.0 = Vec2::new(transform.forward().x, transform.forward().z);
 
-                if time.elapsed_seconds() > jump_counter.jump_time + 1.45 {
+                if time.elapsed_seconds() > jump_counter.jump_time + 1.65 {
                     commands.entity(entity).remove::<Longjump>();
 
                 }
@@ -845,7 +859,8 @@ fn update_grounded(
             Option<&MaxSlopeAngle>,
             Has<Falling>,
             &mut JumpCounter,
-
+            &mut GroundedHeight,
+            &Transform
         ),
         With<CharacterController>,
     >,
@@ -853,7 +868,7 @@ fn update_grounded(
 
 
 ) {
-    let Ok((entity, hits, rotation, max_slope_angle, is_falling, mut jump_counter,)) = query.get_single_mut() else {return;};
+    let Ok((entity, hits, rotation, max_slope_angle, is_falling, mut jump_counter, mut grounded_height, transform)) = query.get_single_mut() else {return;};
 
 
     // if the ground check detects a hit it checks the slope angle of the mesh it has just hit
@@ -869,13 +884,17 @@ fn update_grounded(
     if is_grounded {
         commands.entity(entity).remove::<Falling>();
         commands.entity(entity).remove::<Glide>();
-        
+        commands.entity(entity).remove::<Slide>();
+
+        grounded_height.0 = transform.translation.y;
+
         commands.entity(entity).insert(Grounded);
 
         // if ratchet was falling and now he's grounded he just landed
         if is_falling {
             commands.entity(entity).remove::<SideflipL>();
             commands.entity(entity).remove::<SideflipR>();
+            commands.entity(entity).remove::<Jump>();
 
             commands.entity(entity).insert(Land);
             commands.entity(entity).remove::<Longjump>();

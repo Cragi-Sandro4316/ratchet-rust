@@ -23,6 +23,9 @@ mod player_movement;
 #[path = "./player/player_animation.rs"]
 mod player_animation;
 
+#[path = "./player/weapons.rs"]
+mod weapons;
+
 fn main() {
     App::new()
         .add_plugins((

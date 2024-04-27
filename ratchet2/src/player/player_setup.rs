@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_xpbd_3d::{math::*, prelude::*};
 
-use crate::{player_animation::PlayerAnimationPlugin, player_input::PlayerInputPlugin, player_movement::PlayerMovementPlugin};
+use crate::{player_animation::PlayerAnimationPlugin, player_input::{PlayerInputPlugin, Swing}, player_movement::PlayerMovementPlugin, weapons::WeaponPlugin};
 
 pub struct PlayerPlugin;
 
@@ -12,7 +12,8 @@ impl Plugin for PlayerPlugin {
             .add_plugins((
                 PlayerInputPlugin,
                 PlayerMovementPlugin,
-                PlayerAnimationPlugin
+                PlayerAnimationPlugin,
+                WeaponPlugin
             
             ))
             .add_systems(Startup, spawn_player);
@@ -30,7 +31,8 @@ pub enum MovementAction {
     Sideflip(Vec2),
     Longjump(Vec2),
     Highjump1,
-    Highjump2
+    Highjump2,
+    Swing(Vec2)
 }
 
 pub enum Animation {
@@ -44,12 +46,23 @@ pub enum Animation {
     SideFlipL,
     SideFlipR,
     Longjump,
-    Highjump
+    Highjump,
+    Swing
+
 }
 
 // handle component for entities with character controller
 #[derive(Component)]
 pub struct CharacterController;
+
+// identifier for the gun
+#[derive(Component)]
+pub struct Gun;
+
+// identifier for the wrench
+#[derive(Component)]
+pub struct Wrench;
+
 
 // handle for the camera target
 #[derive(Component)]
@@ -58,6 +71,10 @@ pub struct CameraTarget;
 // array containing all player animations
 #[derive(Resource)]
 pub struct PlayerAnimations(pub Vec<Handle<AnimationClip>>);
+
+// array containing all wrench animations
+#[derive(Resource)]
+pub struct WrenchAnimations(pub Vec<Handle<AnimationClip>>);
 
 // the animation currently being played
 #[derive(Component)]
@@ -95,6 +112,10 @@ pub struct JumpCounter {
 // determines what's the maximum angle the player can walk on before slipping
 #[derive(Component)]
 pub struct MaxSlopeAngle(pub Scalar);
+
+// the height value of the player the last time it was grounded
+#[derive(Component)]
+pub struct GroundedHeight(pub f32);
 
 // [BUNDLES]
 #[derive(Bundle)]
@@ -210,12 +231,13 @@ fn spawn_player(
     ]));
 
     // Player
-    commands.spawn((
+    let player = commands.spawn((
         SceneBundle {
             scene: assets.load("ratchet2.glb#Scene0"),
             transform: Transform::from_xyz(0.0, 5.5, 0.0),
             ..default()
         },
+        
         CharacterControllerBundle::new(Collider::capsule(0.4, 0.4)).with_movement(
             65.0,
             0.92,
@@ -229,7 +251,56 @@ fn spawn_player(
         CameraTarget,
         CurrentAnimation(Animation::Idle),
         PlayerDirection(Vec2::ZERO),
+        Swing {
+            swing_time: 0.,
+            swing_number: 0
+        },
+        GroundedHeight(0.)
         
-    ));
+    )).id();
+
+
+
+    commands.insert_resource(WrenchAnimations(vec![
+        assets.load("wrench.glb#Animation0"),
+        assets.load("wrench.glb#Animation1"),
+        assets.load("wrench.glb#Animation2"),
+        assets.load("wrench.glb#Animation3"),
+        assets.load("wrench.glb#Animation4"),
+        assets.load("wrench.glb#Animation5"),
+        assets.load("wrench.glb#Animation6"),
+        assets.load("wrench.glb#Animation7"),
+        assets.load("wrench.glb#Animation8"),
+        assets.load("wrench.glb#Animation9"),
+        assets.load("wrench.glb#Animation10"),
+        assets.load("wrench.glb#Animation11"),
+        assets.load("wrench.glb#Animation12"),
+        assets.load("wrench.glb#Animation13"),
+        // other animations here
+    ]));
+
+    let wrench = commands.spawn((
+        SceneBundle {
+            scene: assets.load("wrench.glb#Scene0"),
+            visibility: Visibility::Visible,
+            ..default()
+        },
+        Wrench
+    )).id();
+
+    commands.entity(player).push_children(&[wrench]);
+
+
+    let gun = commands.spawn((
+        SceneBundle {
+            scene: assets.load("blastatore.glb#Scene0"),
+            transform: Transform::from_xyz(0.155, 0.06, -0.33).with_scale(Vec3::splat(0.12)),
+            visibility: Visibility::Hidden,
+            ..default()
+        },
+        Gun
+    )).id();
+
+    commands.entity(player).push_children(&[gun]);
 }
 

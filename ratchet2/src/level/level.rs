@@ -13,6 +13,9 @@ impl Plugin for LevelPlugin {
     }
 }
 
+#[derive(Component)]
+pub struct LevelCollider;
+
 fn spawn_terrain(
     mut commands: Commands,
     assets: Res<AssetServer>,
@@ -48,7 +51,7 @@ fn spawn_terrain(
    
 
 
-    // [TERRAIN]
+    // [TERRAIN COLLISION]
     commands.spawn((
         SceneBundle {
             scene: assets.load("./insomniac_museum_collisions.glb#Scene0"),
@@ -59,11 +62,12 @@ fn spawn_terrain(
             visibility: Visibility::Hidden,
             ..default()
         },
-        
+        LevelCollider,
         AsyncSceneCollider::new(Some(ComputedCollider::TriMesh)),
         RigidBody::Static,
     ));
     
+    // [TERRAIN ]
     commands.spawn((
         SceneBundle {
             scene: assets.load("./insomniac_museum.glb#Scene0"),

@@ -63,7 +63,7 @@ fn movement(
             MovementAction::Sideflip(direction) => {
                 linear_velocity.x += linear_velocity.x / 1.8 + direction.x * 4.;
                 linear_velocity.z += linear_velocity.z / 1.8 + direction.y * 4.;
-                linear_velocity.y = 13.5;
+                linear_velocity.y = 12.2;
 
             }
             MovementAction::Longjump(direction) => {
@@ -82,6 +82,13 @@ fn movement(
             }
             MovementAction::Highjump2 => {
                 linear_velocity.y = 3.8;
+            }
+            MovementAction::Swing(direction) => {
+                let normalized_direction = direction.normalize();
+
+                linear_velocity.x += normalized_direction.x * 5.;
+                linear_velocity.z += normalized_direction.y * 5.;
+
             }
         }
     }

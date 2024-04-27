@@ -20,13 +20,13 @@ impl Plugin for PlayerAnimationPlugin {
 
 fn play_animations(
     mut animation_player: Query<&mut AnimationPlayer>,
-    player: Query<(Entity, &CurrentAnimation), With<CharacterController>>,
+    mut player: Query<(Entity, &CurrentAnimation, &mut Swing), With<CharacterController>>,
     children: Query<&Children>,
     mut commands: Commands,
     animations: Res<PlayerAnimations>,
 
 ) {
-    let Ok((player, current_animation)) = player.get_single() else {return;};
+    let Ok((player, current_animation, mut swing)) = player.get_single_mut() else {return;};
 
     for child in children.iter_descendants(player) {
         if let Ok(mut animation_player) = animation_player.get_mut(child) {
@@ -91,6 +91,16 @@ fn play_animations(
                     animation_player.play_with_transition(animations.0[3].clone_weak(), Duration::from_millis(150));
                     
                 }
+                Animation::Swing => {
+                    let anim = 9 + swing.swing_number;
+                    animation_player.play(animations.0[anim as usize].clone_weak()).set_speed(1.3);
+
+                    if animation_player.is_finished() && swing.swing_number == 3 {
+                        swing.swing_number = 0;
+                    }
+
+                }
+                
             }
         }
     }
@@ -111,7 +121,8 @@ fn animation_selector(
         Has<SideflipL>,
         Has<SideflipR>,
         Has<Longjump>,
-        Has<Highjump>
+        Has<Highjump>,
+        &Swing
     ), With<CharacterController>>
 ) {
     let Ok((
@@ -127,12 +138,16 @@ fn animation_selector(
         sideflip_l,
         sideflip_r,
         longjump,
-        highjump
+        highjump,
+        swing
     )) = states.get_single_mut() else {return;};
 
 
     if grounded {
-        if crouching {
+        if swing.swing_number > 0 {
+            current_animation.0 = Animation::Swing;
+        }
+        else if crouching {
             current_animation.0 = Animation::Crouch;
         }
         else if walking {
