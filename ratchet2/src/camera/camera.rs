@@ -175,9 +175,11 @@ fn lerp(
 }
 
 
+
 fn camera_position (
     mut camera: Query<(&mut Transform, &mut CameraRealHeight, &CameraIdentifier)>,
     target: Query<&Transform , (With<CameraTarget>, Without<CameraRealHeight>)>,
+
 ) {
 
     let Ok((mut camera_transform, camera_height, camera_angle)) = camera.get_single_mut() else {return;};
@@ -189,10 +191,13 @@ fn camera_position (
     let y =  camera_height.0; 
 
 
+    
     camera_transform.translation = camera_transform.translation.lerp(
         Vec3::new(x, y, z),
         0.07
     );
+            
+    
 
 }
 

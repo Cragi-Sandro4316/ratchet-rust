@@ -42,8 +42,6 @@ fn movement(
                 linear_velocity.x += direction.x * movement_acceleration.0 * time.delta_seconds();
                 linear_velocity.z += direction.y * movement_acceleration.0 * time.delta_seconds();
 
-            
-
             }
             MovementAction::Jump => {
                 jump_counter.jump_time = time.elapsed_seconds();

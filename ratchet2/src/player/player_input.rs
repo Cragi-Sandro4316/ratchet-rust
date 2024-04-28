@@ -20,7 +20,7 @@ impl Plugin for PlayerInputPlugin {
                 doublejump,
                 highjump,
                 gliding,
-
+                print_stuff
                 
             ).chain());
     }
@@ -81,6 +81,21 @@ pub struct Swing {
     pub swing_number: i32
 }
 
+
+fn print_stuff(
+    camera: Query<(&CameraIdentifier, &Transform)>,
+    player: Query<&Transform, (With<CharacterController>, Without<CameraIdentifier>)>
+) {
+    let Ok((id, trans)) = camera.get_single() else {return;};
+    let Ok(player_trans) = player.get_single() else {return;};
+
+    println!("camera fake: {}", id.0);
+
+    println!("camera real: {}", get_camera_angle(trans, player_trans))
+
+
+}
+
 fn walk(
     mut player: Query<(
         Entity, 
@@ -95,18 +110,19 @@ fn walk(
         Has<Slide>,
         &Swing,
     ), With<CharacterController>>,
-    camera_angle: Query<&CameraIdentifier>,
+    camera: Query<&Transform, (Without<CharacterController>, With<CameraIdentifier>)>,
     gamepads: Res<Gamepads>,
     axes: Res<Axis<GamepadAxis>>,
     mut commands: Commands,
     mut movement_event: EventWriter<MovementAction>
 ) {
     let Ok((player, mut direction, mut transform, grounded, crouching, sideflip_l, sideflip_r, longjump, strafe, slide, swing)) = player.get_single_mut() else {return;};
-    
     if sideflip_l || sideflip_r || longjump || slide || swing.swing_number > 0 || strafe { return; }
     
 
-    let Ok(camera_angle) = camera_angle.get_single() else { return; };
+    let Ok(camera_transform) = camera.get_single() else {  println!("aaa"); return; };
+
+   
 
     for gamepad in gamepads.iter() {
         let axis_rx = GamepadAxis {
@@ -125,14 +141,16 @@ fn walk(
             
             if x > 0.2 || x < -0.2 && !x.is_nan()
             || y > 0.2 || y < -0.2 && !y.is_nan() {
-
+                
                 // calculates the angle to slerp the player to
                 let controller_axes = Vec2::new(x, y).normalize();
 
                 let controller_angle = get_angle(controller_axes.x, controller_axes.y);
 
+                let cam_angle = get_camera_angle(camera_transform, &transform);
 
-                let target_angle = controller_angle - camera_angle.0;
+                let target_angle = controller_angle - cam_angle;
+
 
                 let target_rotation = Quat::from_rotation_y(target_angle);
 
@@ -184,6 +202,22 @@ fn walk(
 
 }
 
+
+
+fn get_camera_angle(
+    camera_transform: &Transform,
+    player_transform: &Transform
+) -> f32 {
+    let mut cam_angle = camera_transform.rotation.angle_between(Quat::from_rotation_y(0.));
+    
+    if camera_transform.translation.x > player_transform.translation.x {
+        cam_angle *= -1.;
+    }
+
+    cam_angle + 1.57079
+}
+
+
 fn strafe(
     mut player: Query<(
         Entity, 
@@ -199,7 +233,7 @@ fn strafe(
         &Swing,
         Has<Slide>
     ), With<CharacterController>>,
-    camera_angle: Query<&CameraIdentifier>,
+    camera_angle: Query<&Transform, (Without<CharacterController>, With<CameraIdentifier>)>,
     gamepads: Res<Gamepads>,
     axes: Res<Axis<GamepadAxis>>,
     buttons: Res<ButtonInput<GamepadButton>>,
@@ -213,7 +247,7 @@ fn strafe(
         commands.entity(player).remove::<Strafe>();
         return;
     }
-    let Ok(camera_angle) = camera_angle.get_single() else {return;};
+    let Ok( camera_transform) = camera_angle.get_single() else {return;};
 
     for gamepad in gamepads.iter() {
         let axis_rx = GamepadAxis {
@@ -238,7 +272,9 @@ fn strafe(
                 return;
             }
 
-            let target_rotation = Quat::from_rotation_y(-camera_angle.0 + 1.5708);
+
+            
+            let target_rotation = Quat::from_rotation_y(-get_camera_angle(camera_transform, &transform) + 1.5708);
 
             transform.rotation = transform.rotation.slerp(target_rotation, 0.13);
 
@@ -249,8 +285,7 @@ fn strafe(
 
                 let controller_angle = get_angle(controller_axes.x, controller_axes.y);
 
-                let direction_angle = -camera_angle.0 + controller_angle;
-
+                let direction_angle = -get_camera_angle(camera_transform, &transform) + controller_angle;
 
                 direction.0 = Vec2::new(
                     -direction_angle.sin(), 
@@ -329,7 +364,7 @@ fn sideflips(
         &mut LinearVelocity,
         &mut JumpCounter
     ), With<CharacterController>>,
-    camera_angle: Query<&CameraIdentifier>,
+    camera_angle: Query<&Transform, With<CameraIdentifier>>,
     gamepads: Res<Gamepads>,
     axes: Res<Axis<GamepadAxis>>,
     buttons: Res<ButtonInput<GamepadButton>>,
@@ -339,7 +374,7 @@ fn sideflips(
 
 ) {
     let Ok((entity, direction, crouching, transform, strafing, grounded, mut velocity, mut jump_counter, )) = player.get_single_mut() else {return;};
-    let Ok(camera_angle) = camera_angle.get_single() else {return;};
+    let Ok(camera_transform) = camera_angle.get_single() else {return;};
  
     for gamepad in gamepads.iter() {
         let axis_rx = GamepadAxis {
@@ -369,7 +404,9 @@ fn sideflips(
 
                 let mut player_angle = get_angle(-direction.0.x, direction.0.y).to_degrees() + 90.;
 
-                player_angle += camera_angle.0.to_degrees();
+                let camera_angle = get_camera_angle(camera_transform, &transform);
+
+                player_angle += camera_angle.to_degrees();
 
 
                 // i don't have the slightest idea of why player_angle sometimes skyrockets beyond 720, however this solution should work. 
@@ -387,7 +424,7 @@ fn sideflips(
                 };
 
                 if crouching && buttons.just_pressed(jump) {
-                    if player_angle - controller_angle + camera_angle.0 > 25. {
+                    if player_angle - controller_angle + camera_angle > 25. {
                         commands.entity(entity).insert(SideflipR);
                         movement_event.send(MovementAction::Sideflip(Vec2::new(
                             transform.right().x, 
@@ -410,7 +447,7 @@ fn sideflips(
                         ));
 
                     }
-                    else if player_angle - controller_angle + camera_angle.0 < -25. {
+                    else if player_angle - controller_angle + camera_angle < -25. {
                         
                         
                         commands.entity(entity).insert(SideflipL);
@@ -447,7 +484,6 @@ fn sideflips(
 
                 if buttons.just_pressed(jump) {
                     if controller_axes.normalize().x > 0.4226 && grounded {
-                        println!("aaa");
                         velocity.x = 0.;
                         velocity.z = 0.;
                         commands.entity(entity).insert(SideflipR);
@@ -501,6 +537,7 @@ fn sideflips(
         }
     }
 }
+
 
 fn longjump(
     mut player: Query<(
