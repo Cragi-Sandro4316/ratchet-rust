@@ -52,5 +52,6 @@ fn windows_settings(
 
     window.title = "Ratchet & Clank: Computer coming".to_string();
 
+    // window.present_mode = PresentMode::AutoNoVsync;
 
 }

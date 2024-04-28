@@ -20,7 +20,6 @@ impl Plugin for PlayerInputPlugin {
                 doublejump,
                 highjump,
                 gliding,
-                print_stuff
                 
             ).chain());
     }
@@ -82,19 +81,7 @@ pub struct Swing {
 }
 
 
-fn print_stuff(
-    camera: Query<(&CameraIdentifier, &Transform)>,
-    player: Query<&Transform, (With<CharacterController>, Without<CameraIdentifier>)>
-) {
-    let Ok((id, trans)) = camera.get_single() else {return;};
-    let Ok(player_trans) = player.get_single() else {return;};
 
-    println!("camera fake: {}", id.0);
-
-    println!("camera real: {}", get_camera_angle(trans, player_trans))
-
-
-}
 
 fn walk(
     mut player: Query<(
@@ -120,7 +107,7 @@ fn walk(
     if sideflip_l || sideflip_r || longjump || slide || swing.swing_number > 0 || strafe { return; }
     
 
-    let Ok(camera_transform) = camera.get_single() else {  println!("aaa"); return; };
+    let Ok(camera_transform) = camera.get_single() else {return;};
 
    
 
@@ -204,7 +191,7 @@ fn walk(
 
 
 
-fn get_camera_angle(
+pub fn get_camera_angle(
     camera_transform: &Transform,
     player_transform: &Transform
 ) -> f32 {

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{player::{CameraTarget, GroundedHeight}, player_input::{DoubleJump, Jump, Longjump, SideflipL, SideflipR}};
+use crate::{player::{CameraTarget, GroundedHeight}, player_input::{get_camera_angle, DoubleJump, Jump, Longjump, SideflipL, SideflipR}};
 
 pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
@@ -57,13 +57,15 @@ const CAMERA_DISTANCE: f32 = 5.;
 const CAMERA_HEIGHT_SPEED: f32 = 12.;
 
 fn camera_rotate(
-    mut camera: Query<&mut CameraIdentifier>,
+    mut camera: Query<(&Transform, &mut CameraIdentifier)>,
+    target: Query<&Transform, (With<CameraTarget>, Without<CameraIdentifier>)>,
     gamepads: Res<Gamepads>,
     axes: Res<Axis<GamepadAxis>>,
     time: Res<Time>
 ) {
-    let Ok(mut camera_angle) = camera.get_single_mut() else {return;};
-
+    let Ok((cam_transform, mut camera_angle)) = camera.get_single_mut() else {return;};
+    let Ok(target_transform) = target.get_single() else {return;};
+    
     for gamepad in gamepads.iter() {
         let axis_lx = GamepadAxis {
             gamepad,
@@ -71,7 +73,12 @@ fn camera_rotate(
         };
 
         if let Some(x) = axes.get(axis_lx) {
-            camera_angle.0 += x * time.delta_seconds() * 2.;
+            if x > 0.2 || x < -0.2 {
+                camera_angle.0 += x * time.delta_seconds() * 2.;
+            }
+            else {
+                camera_angle.0 = get_camera_angle(cam_transform, target_transform);
+            }
         }
     }
 
@@ -180,22 +187,68 @@ fn camera_position (
     mut camera: Query<(&mut Transform, &mut CameraRealHeight, &CameraIdentifier)>,
     target: Query<&Transform , (With<CameraTarget>, Without<CameraRealHeight>)>,
 
+
+    gamepads: Res<Gamepads>,
+    axes: Res<Axis<GamepadAxis>>,
 ) {
 
     let Ok((mut camera_transform, camera_height, camera_angle)) = camera.get_single_mut() else {return;};
     let Ok(target_transform) = target.get_single() else {return;};
-    
-    // calculates the camera position through trigonometry and adds the player position to it
-    let x = target_transform.translation.x + CAMERA_DISTANCE * f32::cos(camera_angle.0); 
-    let z = target_transform.translation.z + CAMERA_DISTANCE * f32::sin(camera_angle.0);
-    let y =  camera_height.0; 
+
+    for gamepad in gamepads.iter() {
+
+        let camera_y =  camera_height.0; 
+
+        let mut position = Vec2::ZERO;
+
+        let axis_lx = GamepadAxis {
+            gamepad,
+            axis_type: GamepadAxisType::RightStickX
+        };
+
+        if let Some(x) = axes.get(axis_lx) {
+
+            if x > 0.2 || x < -0.2 {
+                // if isn't neutral calculates the camera position through goniometry
+                position = Vec2::new(
+                    target_transform.translation.x + CAMERA_DISTANCE * f32::cos(camera_angle.0), 
+                    target_transform.translation.z + CAMERA_DISTANCE * f32::sin(camera_angle.0)
+                );
+
+            }
+            else if camera_transform.translation.distance(target_transform.translation) != CAMERA_DISTANCE {
+                // if the stick is neutral it just checks the distance between the camera and the player
+                // if the camera and the player are too far apart or too close it adjusts the camera position
+                position = Vec2::new(
+                    target_transform.translation.x + (camera_transform.back().normalize().x * CAMERA_DISTANCE), 
+                    target_transform.translation.z + (camera_transform.back().normalize().z * CAMERA_DISTANCE)
+                );
+
+            }
 
 
+            camera_transform.translation = camera_transform.translation.lerp(
+                Vec3::new(
+                    position.x, 
+                    camera_y, 
+                    position.y
+                ),
+                0.07
+            );
+
+        }
+
+        
+
+        println!("height: {}", camera_y);
+        println!("transform: {}", camera_transform.translation.y);
+
+    }
+
+
+
     
-    camera_transform.translation = camera_transform.translation.lerp(
-        Vec3::new(x, y, z),
-        0.07
-    );
+    
             
     
 
